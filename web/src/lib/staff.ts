@@ -12,6 +12,7 @@ export type StaffMember = {
   name: string;
   email: string;
   role: StaffRole;
+  is_owner: boolean;
 };
 
 export function roleLabel(role: string): string {

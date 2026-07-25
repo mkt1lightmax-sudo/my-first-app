@@ -53,12 +53,17 @@ export default function StaffListPage() {
         {staffList?.map((s) => (
           <div key={s.id} className="flex items-center justify-between rounded-xl border bg-white p-4">
             <div>
-              <div className="font-medium text-gray-900">{s.name}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-gray-900">{s.name}</span>
+                {s.is_owner && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">เจ้าของระบบ</span>
+                )}
+              </div>
               <div className="mt-0.5 text-xs text-gray-500">
                 {s.email} · {roleLabel(s.role)}
               </div>
             </div>
-            {currentStaff?.id !== s.id && (
+            {currentStaff?.id !== s.id && !s.is_owner && (
               <button
                 onClick={() => handleDelete(s.id)}
                 disabled={deletingId === s.id}

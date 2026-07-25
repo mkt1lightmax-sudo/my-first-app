@@ -6,7 +6,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const router = express.Router();
 
 router.get("/", requireAuth, async (req, res) => {
-  const result = await query("SELECT id, name, email, role FROM staff ORDER BY name");
+  const result = await query("SELECT id, name, email, role, is_owner FROM staff ORDER BY name");
   res.json({ ok: true, staff: result.rows });
 });
 
@@ -32,15 +32,21 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
   res.status(201).json({ ok: true, staff: result.rows[0] });
 });
 
-// ลบพนักงาน — แอดมินเท่านั้น (ลบตัวเองไม่ได้ กันล็อกตัวเองออก)
+// ลบพนักงาน — แอดมินเท่านั้น (ลบตัวเองไม่ได้ กันล็อกตัวเองออก, ลบเจ้าของระบบไม่ได้ไม่ว่าใครพยายามลบ)
 router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
   if (Number(req.params.id) === req.staff.id) {
     return res.status(400).json({ ok: false, error: "ลบบัญชีตัวเองไม่ได้" });
   }
-  const result = await query("DELETE FROM staff WHERE id = $1 RETURNING id", [req.params.id]);
-  if (!result.rows[0]) {
+
+  const target = await query("SELECT is_owner FROM staff WHERE id = $1", [req.params.id]);
+  if (!target.rows[0]) {
     return res.status(404).json({ ok: false, error: "staff not found" });
   }
+  if (target.rows[0].is_owner) {
+    return res.status(403).json({ ok: false, error: "ลบบัญชีเจ้าของระบบไม่ได้" });
+  }
+
+  await query("DELETE FROM staff WHERE id = $1", [req.params.id]);
   res.json({ ok: true });
 });
 

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS staff (
   password_hash TEXT NOT NULL,
   role          TEXT NOT NULL DEFAULT 'sales'
                 CHECK (role IN ('admin', 'sales', 'surveyor', 'installer')),
+  is_owner      BOOLEAN NOT NULL DEFAULT false, -- เจ้าของระบบ ลบไม่ได้ไม่ว่าใครพยายามลบ
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
