@@ -30,7 +30,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-2xl border bg-white p-6 shadow-sm">
         <div className="mb-6 flex justify-center">
-          <Logo />
+          <Logo className="h-12" />
         </div>
         <h1 className="mb-4 text-lg font-semibold text-gray-900">เข้าสู่ระบบ</h1>
 
