@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "../context/AuthContext";
-import { HomeIcon, UsersIcon, BriefcaseIcon, CalendarIcon, BellIcon, UserIcon, LogoutIcon } from "./icons";
+import { HomeIcon, UsersIcon, BriefcaseIcon, CalendarIcon, BellIcon, UserIcon, UserPlusIcon, LogoutIcon } from "./icons";
+import { roleLabel } from "../lib/staff";
 
 const tabs = [
   { to: "/", label: "หน้าหลัก", icon: HomeIcon, end: true },
@@ -10,13 +11,6 @@ const tabs = [
   { to: "/appointments", label: "งาน", icon: BriefcaseIcon, end: false },
   { to: "/calendar", label: "ปฏิทิน", icon: CalendarIcon, end: false },
 ];
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: "ผู้ดูแลระบบ",
-  sales: "ฝ่ายขาย",
-  surveyor: "ผู้สำรวจ",
-  installer: "ช่างติดตั้ง",
-};
 
 export default function Layout() {
   const { staff, logout } = useAuth();
@@ -40,11 +34,23 @@ export default function Layout() {
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
             <div className="absolute right-4 top-14 z-20 w-56 rounded-xl border bg-white p-3 shadow-lg">
               <div className="font-medium text-gray-900">{staff?.name}</div>
-              <div className="text-xs text-gray-500">{staff ? ROLE_LABELS[staff.role] ?? staff.role : ""}</div>
+              <div className="text-xs text-gray-500">{staff ? roleLabel(staff.role) : ""}</div>
               <div className="mt-1 truncate text-xs text-gray-400">{staff?.email}</div>
+
+              {staff?.role === "admin" && (
+                <Link
+                  to="/staff"
+                  onClick={() => setMenuOpen(false)}
+                  className="mt-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <UserPlusIcon className="h-4 w-4" />
+                  จัดการพนักงาน
+                </Link>
+              )}
+
               <button
                 onClick={() => logout()}
-                className="mt-3 flex w-full items-center gap-2 rounded-lg border border-brand-red px-3 py-2 text-sm font-medium text-brand-red hover:bg-brand-red/5"
+                className="mt-2 flex w-full items-center gap-2 rounded-lg border border-brand-red px-3 py-2 text-sm font-medium text-brand-red hover:bg-brand-red/5"
               >
                 <LogoutIcon className="h-4 w-4" />
                 ออกจากระบบ

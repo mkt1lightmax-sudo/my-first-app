@@ -160,6 +160,16 @@ export function BatteryIcon({ className }: IconProps) {
   );
 }
 
+export function UserPlusIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M3 20c0-3.6 2.7-6.5 6-6.5s6 2.9 6 6.5" strokeLinecap="round" />
+      <path d="M18 8v6M15 11h6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function ChevronRightIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>

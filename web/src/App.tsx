@@ -11,6 +11,8 @@ import SurveyDetailPage from './pages/surveys/SurveyDetailPage'
 import AppointmentsListPage from './pages/appointments/AppointmentsListPage'
 import AppointmentFormPage from './pages/appointments/AppointmentFormPage'
 import CalendarPage from './pages/appointments/CalendarPage'
+import StaffListPage from './pages/staff/StaffListPage'
+import StaffFormPage from './pages/staff/StaffFormPage'
 
 function App() {
   return (
@@ -29,6 +31,8 @@ function App() {
               <Route path="/appointments/new" element={<AppointmentFormPage />} />
               <Route path="/appointments/:id/edit" element={<AppointmentFormPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/staff" element={<StaffListPage />} />
+              <Route path="/staff/new" element={<StaffFormPage />} />
             </Route>
           </Route>
         </Routes>
