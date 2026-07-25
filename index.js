@@ -1,7 +1,7 @@
 // จุดเริ่มสำหรับรัน API บนเครื่องตัวเอง (local dev) — `npm start`
-// Vercel ใช้ api/index.js แยกต่างหาก แต่ทั้งคู่ใช้ Express app เดียวกันจาก api/app.js
+// Vercel ใช้ api/index.js แยกต่างหาก แต่ทั้งคู่ใช้ Express app เดียวกันจาก server/app.js
 require("dotenv").config();
-const app = require("./api/app");
+const app = require("./server/app");
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
