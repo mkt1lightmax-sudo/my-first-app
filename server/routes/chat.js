@@ -78,11 +78,40 @@ router.get("/meta/webhook", (req, res) => {
   res.status(403).send("forbidden");
 });
 
+// บันทึกการเข้ามาของ Meta webhook 30 ครั้งล่าสุด (ไว้ไล่ปัญหา) — เก็บแค่เวลา ไอดี และผลการตรวจ ไม่เก็บเนื้อหาข้อความ
+async function logMetaWebhook(entry) {
+  try {
+    await query(
+      `INSERT INTO app_settings (key, value) VALUES ('meta_webhook_log', jsonb_build_array($1::jsonb))
+       ON CONFLICT (key) DO UPDATE SET
+         value = (SELECT jsonb_agg(x) FROM (SELECT x FROM jsonb_array_elements(jsonb_build_array($1::jsonb) || app_settings.value) x LIMIT 30) t),
+         updated_at = now()`,
+      [JSON.stringify({ at: new Date().toISOString(), ...entry })]
+    );
+  } catch (err) {
+    console.error("meta webhook log failed:", err.message);
+  }
+}
+
 router.post("/meta/webhook", async (req, res) => {
-  if (!meta.verifySignature(req.rawBody, req.get("x-hub-signature-256"))) {
+  const sigOk = meta.verifySignature(req.rawBody, req.get("x-hub-signature-256"));
+  const summary = {
+    sigOk,
+    hasSecret: Boolean(process.env.META_APP_SECRET),
+    hasSigHeader: Boolean(req.get("x-hub-signature-256")),
+    object: req.body?.object ?? null,
+    entries: (req.body?.entry || []).map((e) => ({
+      id: String(e.id),
+      messaging: (e.messaging || []).map((m) => (m.message ? (m.message.is_echo ? "echo" : "message") : Object.keys(m).filter((k) => !["sender", "recipient", "timestamp"].includes(k))[0] || "other")),
+      changes: (e.changes || []).map((c) => c.field),
+    })),
+  };
+  if (!sigOk) {
+    await logMetaWebhook({ ...summary, result: "invalid signature" });
     return res.status(401).json({ ok: false, error: "invalid signature" });
   }
 
+  const matched = [];
   const channel = req.body?.object === "instagram" ? "instagram" : req.body?.object === "page" ? "messenger" : null;
   if (channel) {
     for (const entry of req.body.entry || []) {
@@ -91,6 +120,7 @@ router.post("/meta/webhook", async (req, res) => {
       const account = (
         await query(`SELECT * FROM chat_accounts WHERE channel = $1 AND ${column} = $2 AND is_active`, [channel, String(entry.id)])
       ).rows[0];
+      matched.push(account ? account.id : null);
       if (!account) continue;
 
       for (const event of entry.messaging || []) {
@@ -98,10 +128,12 @@ router.post("/meta/webhook", async (req, res) => {
           await handleMetaEvent(account, event);
         } catch (err) {
           console.error("Meta event error:", err);
+          summary.error = String(err.message).slice(0, 200);
         }
       }
     }
   }
+  await logMetaWebhook({ ...summary, matchedAccounts: matched, result: channel ? "processed" : "ignored object" });
   res.json({ ok: true });
 });
 
