@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, SESSION_EXPIRED_EVENT } from "../lib/api";
 
 type Staff = { id: number; name: string; email: string; role: string };
 
@@ -26,6 +26,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .finally(() => setLoading(false));
+
+    // ถ้าเซิร์ฟเวอร์บอกว่าหลุดจากระบบ (เช่น บัญชีถูกลบ) — ล้างสถานะ แล้ว ProtectedRoute จะพาไปหน้าล็อกอิน
+    const onExpired = () => setStaff(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   async function login(email: string, password: string) {

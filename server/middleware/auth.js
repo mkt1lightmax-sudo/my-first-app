@@ -1,16 +1,31 @@
 const { verifyToken, COOKIE_NAME } = require("../lib/jwt");
+const { query } = require("../db/pool");
 
-function requireAuth(req, res, next) {
+// ตรวจว่าล็อกอินอยู่ — และเช็กกับฐานข้อมูลทุกครั้งว่าพนักงานคนนี้ยังมีอยู่
+// ถ้าถูกลบไปแล้ว ทุกเครื่องที่ล็อกอินค้างไว้จะถูกเตะออกทันทีในคำขอถัดไป
+// (ใช้ชื่อ/ตำแหน่งล่าสุดจากฐานข้อมูลด้วย — แอดมินเปลี่ยนตำแหน่งแล้วมีผลทันที)
+async function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) {
     return res.status(401).json({ ok: false, error: "not authenticated" });
   }
+
+  let payload;
   try {
-    req.staff = verifyToken(token);
-    next();
+    payload = verifyToken(token);
   } catch {
     return res.status(401).json({ ok: false, error: "invalid or expired session" });
   }
+
+  const result = await query("SELECT id, name, email, role FROM staff WHERE id = $1", [payload.id]);
+  const staff = result.rows[0];
+  if (!staff) {
+    res.clearCookie(COOKIE_NAME);
+    return res.status(401).json({ ok: false, error: "บัญชีนี้ถูกลบออกจากระบบแล้ว" });
+  }
+
+  req.staff = staff;
+  next();
 }
 
 function requireRole(...roles) {
