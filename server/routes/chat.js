@@ -1,6 +1,13 @@
 const express = require("express");
 const { query } = require("../db/pool");
 const { requireAuth } = require("../middleware/auth");
+const { can, requirePermission } = require("../lib/permissions");
+
+// เซลล์เห็นเฉพาะแชทที่ตัวเองดูแล + ที่ยังไม่มีคนดูแล
+function canSeeConvo(staff, convo) {
+  return can(staff, "chat.viewAll") || convo.assigned_staff_id === null || convo.assigned_staff_id === staff.id;
+}
+const NOT_YOURS = { ok: false, error: "แชทนี้มีพนักงานคนอื่นดูแลอยู่" };
 const line = require("../lib/line");
 const meta = require("../lib/meta");
 const accountsRouter = require("./chatAccounts");
@@ -169,13 +176,14 @@ function selectConvo(id) {
 }
 
 // รายการแชท — กรองได้: ?filter=mine|unassigned  ?tag=ชื่อป้าย  ?staff=ไอดีพนักงาน  ?account=ไอดีบัญชี
-router.get("/conversations", requireAuth, async (req, res) => {
+router.get("/conversations", requireAuth, requirePermission("chat.view"), async (req, res) => {
   const where = [];
   const params = [];
   const add = (sql, value) => {
     params.push(value);
     where.push(sql.replace("?", `$${params.length}`));
   };
+  if (!can(req.staff, "chat.viewAll")) add("(c.assigned_staff_id IS NULL OR c.assigned_staff_id = ?)", req.staff.id);
   if (req.query.filter === "mine") add("c.assigned_staff_id = ?", req.staff.id);
   else if (req.query.filter === "unassigned") where.push("c.assigned_staff_id IS NULL");
   if (req.query.staff) add("c.assigned_staff_id = ?", Number(req.query.staff));
@@ -192,20 +200,25 @@ router.get("/conversations", requireAuth, async (req, res) => {
 });
 
 // ป้ายทั้งหมด (ป้ายตั้งต้น + ป้ายที่ทีมสร้างเอง)
-router.get("/tags", requireAuth, async (req, res) => {
+router.get("/tags", requireAuth, requirePermission("chat.view"), async (req, res) => {
   const result = await query("SELECT DISTINCT unnest(tags) AS tag FROM chat_conversations");
   const used = result.rows.map((r) => r.tag);
   res.json({ ok: true, tags: [...new Set([...PRESET_TAGS, ...used])] });
 });
 
 // เปลี่ยนผู้ดูแล และ/หรือ ป้ายกลุ่ม — body: { assigned_staff_id?: number|null, tags?: string[] }
-router.patch("/conversations/:id", requireAuth, async (req, res) => {
+router.patch("/conversations/:id", requireAuth, requirePermission("chat.reply"), async (req, res) => {
   const convo = (await query("SELECT * FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
   if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
+  if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
 
   let assigned = convo.assigned_staff_id;
   if (req.body && "assigned_staff_id" in req.body) {
     assigned = req.body.assigned_staff_id === null ? null : Number(req.body.assigned_staff_id);
+    // เซลล์รับเรื่องเอง หรือปล่อยเรื่องได้ แต่มอบหมายให้คนอื่นไม่ได้
+    if (assigned !== null && assigned !== req.staff.id && !can(req.staff, "chat.assignOthers")) {
+      return res.status(403).json({ ok: false, error: "คุณมอบหมายแชทให้คนอื่นไม่ได้ — รับเรื่องเองได้เท่านั้น" });
+    }
     if (assigned !== null) {
       const exists = await query("SELECT id FROM staff WHERE id = $1", [assigned]);
       if (!exists.rows[0]) return res.status(400).json({ ok: false, error: "ไม่พบพนักงานคนนี้" });
@@ -230,9 +243,10 @@ router.patch("/conversations/:id", requireAuth, async (req, res) => {
   res.json({ ok: true, conversation: await selectConvo(convo.id) });
 });
 
-router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
+router.get("/conversations/:id/messages", requireAuth, requirePermission("chat.view"), async (req, res) => {
   const convo = await selectConvo(req.params.id);
   if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
+  if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
 
   const messages = await query(
     `SELECT m.id, m.direction, m.message_type, m.text, m.created_at, s.name AS staff_name
@@ -245,13 +259,14 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
 });
 
 // ส่งข้อความตอบลูกค้า — ส่งออกทางบัญชีเดียวกับที่ลูกค้าทักเข้ามา
-router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
+router.post("/conversations/:id/messages", requireAuth, requirePermission("chat.reply"), async (req, res) => {
   const text = (req.body?.text || "").trim();
   if (!text) return res.status(400).json({ ok: false, error: "text is required" });
   if (text.length > 2000) return res.status(400).json({ ok: false, error: "ข้อความยาวเกิน 2000 ตัวอักษร" });
 
   const convo = (await query("SELECT * FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
   if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
+  if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
   const account = convo.account_id ? await getAccount(convo.account_id) : null;
   if (!account || !account.is_active) {
     return res.status(400).json({ ok: false, error: "บัญชีของแชทนี้ถูกลบหรือปิดใช้งานแล้ว ตอบกลับไม่ได้" });

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import type { Conversation } from "../../lib/chat";
+import { can } from "../../lib/permissions";
 
 type StaffOption = { id: number; name: string };
 
@@ -54,6 +55,21 @@ export default function CustomerPanel({
   }
 
   const isMine = me && conversation.assigned_staff_id === me.id;
+  const canReply = can(me, "chat.reply");
+  const canAssignOthers = can(me, "chat.assignOthers");
+
+  // ดูเท่านั้น: แสดงข้อมูลอย่างเดียว ไม่มีปุ่ม
+  if (!canReply) {
+    return (
+      <div className="border-b bg-white px-4 py-2 text-xs">
+        <span className="text-gray-500">ผู้ดูแล: </span>
+        <span className={conversation.assigned_staff_name ? "font-medium text-brand-navy" : "text-gray-400"}>
+          {conversation.assigned_staff_name ?? "ยังไม่มี"}
+        </span>
+        {conversation.tags.length > 0 && <span className="text-gray-400"> · {conversation.tags.join(", ")}</span>}
+      </div>
+    );
+  }
 
   return (
     <div className="border-b bg-white px-4 py-2">
@@ -81,6 +97,16 @@ export default function CustomerPanel({
 
       {open && (
         <div className="mt-2 space-y-3 pb-1">
+          {!canAssignOthers && isMine && (
+            <button
+              onClick={() => save({ assigned_staff_id: null })}
+              disabled={saving}
+              className="w-full rounded-lg border px-3 py-2 text-xs text-gray-700"
+            >
+              ปล่อยเรื่อง (ให้คนอื่นรับแทน)
+            </button>
+          )}
+          {canAssignOthers && (
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-gray-700">ลูกค้าของ / มอบหมายให้ตอบ</span>
             <select
@@ -98,6 +124,7 @@ export default function CustomerPanel({
               ))}
             </select>
           </label>
+          )}
 
           <div>
             <span className="mb-1 block text-xs font-medium text-gray-700">กลุ่มลูกค้า (เลือกได้หลายอัน)</span>

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { can } from "../lib/permissions";
 import {
   RATE_TYPES,
   RATE_TYPE_LABELS,
@@ -25,6 +27,7 @@ type SurveyPrefill = {
 };
 
 export default function CalculatorPage() {
+  const { staff } = useAuth();
   const [searchParams] = useSearchParams();
   const surveyId = searchParams.get("surveyId");
 
@@ -98,7 +101,7 @@ export default function CalculatorPage() {
       <ResultView
         result={result}
         onAdjust={() => setResult(null)}
-        onSave={surveyId ? handleSave : undefined}
+        onSave={surveyId && can(staff, "customers.edit") ? handleSave : undefined}
         saving={saving}
         saved={saved}
       />

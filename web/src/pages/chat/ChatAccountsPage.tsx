@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { isOwner } from "../../lib/permissions";
 import { CHANNEL_COLORS, CHANNEL_LABELS, type ChatAccount } from "../../lib/chat";
 
 type NewChannel = "line" | "messenger" | "instagram";
@@ -28,7 +29,7 @@ export default function ChatAccountsPage() {
   }
   useEffect(load, []);
 
-  if (staff && staff.role !== "admin") return <Navigate to="/chat" replace />;
+  if (staff && !isOwner(staff)) return <Navigate to="/chat" replace />;
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();

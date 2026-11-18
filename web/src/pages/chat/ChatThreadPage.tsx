@@ -4,11 +4,14 @@ import { api, ApiError } from "../../lib/api";
 import { CHANNEL_COLORS, CHANNEL_LABELS, formatChatTime, metaReplyHoursLeft, type ChatMessage, type Conversation } from "../../lib/chat";
 import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
+import { useAuth } from "../../context/AuthContext";
+import { can } from "../../lib/permissions";
 
 type ConversationInfo = Conversation;
 
 export default function ChatThreadPage() {
   const { id } = useParams();
+  const { staff: me } = useAuth();
   const [conversation, setConversation] = useState<ConversationInfo | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
@@ -107,6 +110,9 @@ export default function ChatThreadPage() {
         </p>
       )}
       {error && <p className="bg-white px-4 pt-2 text-sm text-brand-red">{error}</p>}
+      {!can(me, "chat.reply") ? (
+        <p className="border-t bg-white px-4 py-3 text-center text-xs text-gray-500">คุณดูแชทได้อย่างเดียว ตอบกลับไม่ได้</p>
+      ) : (
       <form onSubmit={handleSend} className="flex gap-2 border-t bg-white px-3 py-2">
         <input
           value={text}
@@ -122,6 +128,7 @@ export default function ChatThreadPage() {
           {sending ? "..." : "ส่ง"}
         </button>
       </form>
+      )}
     </div>
   );
 }

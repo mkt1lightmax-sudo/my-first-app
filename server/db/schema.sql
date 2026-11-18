@@ -205,3 +205,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_accounts_ig   ON chat_accounts(meta_i
 ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES chat_accounts(id) ON DELETE SET NULL;
 ALTER TABLE chat_conversations DROP CONSTRAINT IF EXISTS chat_conversations_channel_external_user_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_conversations_account_user ON chat_conversations(account_id, external_user_id);
+
+-- เพิ่มตำแหน่ง "ดูเท่านั้น" (viewer) — เจ้าของระบบยังเป็น role admin + is_owner = true
+ALTER TABLE staff DROP CONSTRAINT IF EXISTS staff_role_check;
+ALTER TABLE staff ADD CONSTRAINT staff_role_check CHECK (role IN ('admin', 'sales', 'surveyor', 'installer', 'viewer'));

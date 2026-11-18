@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
+import ProtectedRoute, { RequirePermission } from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
@@ -28,17 +28,17 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/calculator" element={<CalculatorPage />} />
               <Route path="/surveys" element={<SurveyListPage />} />
-              <Route path="/surveys/new" element={<SurveyFormPage />} />
+              <Route path="/surveys/new" element={<RequirePermission permission="customers.edit"><SurveyFormPage /></RequirePermission>} />
               <Route path="/surveys/:id" element={<SurveyDetailPage />} />
               <Route path="/appointments" element={<AppointmentsListPage />} />
-              <Route path="/appointments/new" element={<AppointmentFormPage />} />
+              <Route path="/appointments/new" element={<RequirePermission permission="appointments.create"><AppointmentFormPage /></RequirePermission>} />
               <Route path="/appointments/:id/edit" element={<AppointmentFormPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/staff" element={<StaffListPage />} />
               <Route path="/staff/new" element={<StaffFormPage />} />
               <Route path="/chat" element={<ChatListPage />} />
               <Route path="/chat/accounts" element={<ChatAccountsPage />} />
-              <Route path="/chat/:id" element={<ChatThreadPage />} />
+              <Route path="/chat/:id" element={<RequirePermission permission="chat.view"><ChatThreadPage /></RequirePermission>} />
             </Route>
           </Route>
         </Routes>

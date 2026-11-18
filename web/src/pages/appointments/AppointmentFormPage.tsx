@@ -11,6 +11,9 @@ import {
   type Appointment,
 } from "../../lib/appointments";
 
+import { useAuth } from "../../context/AuthContext";
+import { can, canEditAppointment } from "../../lib/permissions";
+
 type StaffOption = { id: number; name: string; role: string };
 type SurveyOption = { id: number; customer_name: string };
 
@@ -22,6 +25,8 @@ function toLocalInputValue(iso?: string) {
 }
 
 export default function AppointmentFormPage() {
+  const { staff } = useAuth();
+  const [loadedAssignedId, setLoadedAssignedId] = useState<number | null>(null);
   const { id } = useParams();
   const isEditing = !!id;
   const navigate = useNavigate();
@@ -60,6 +65,7 @@ export default function AppointmentFormPage() {
       setStart(toLocalInputValue(a.scheduled_start));
       setEnd(toLocalInputValue(a.scheduled_end));
       setAssignedStaffId(a.assigned_staff_id ? String(a.assigned_staff_id) : "");
+      setLoadedAssignedId(a.assigned_staff_id ?? null);
       setStatus(a.status);
       setNotes(a.notes ?? "");
     });
@@ -101,6 +107,9 @@ export default function AppointmentFormPage() {
     }
   }
 
+  // สร้างใหม่: ต้องมีสิทธิ์สร้าง / แก้ไข: ต้องมีสิทธิ์แก้ทุกงาน หรือเป็นงานของตัวเอง
+  const readOnly = isEditing ? !canEditAppointment(staff, loadedAssignedId) : !can(staff, "appointments.create");
+
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm";
   const labelClass = "mb-1 block text-sm text-gray-700";
 
@@ -108,7 +117,11 @@ export default function AppointmentFormPage() {
     <div>
       <h1 className="mb-4 text-xl font-semibold text-gray-900">{isEditing ? "แก้ไขนัดหมาย" : "สร้างนัดหมาย"}</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border bg-white p-4">
+      {readOnly && (
+        <p className="mb-3 rounded-lg bg-gray-100 p-3 text-sm text-gray-600">คุณดูงานนี้ได้อย่างเดียว แก้ไขไม่ได้</p>
+      )}
+      <form onSubmit={handleSubmit} className="rounded-2xl border bg-white p-4">
+        <fieldset disabled={readOnly} className="space-y-4">
         <div>
           <label className={labelClass}>ประเภทนัดหมาย</label>
           <div className="flex gap-2">
@@ -168,7 +181,12 @@ export default function AppointmentFormPage() {
 
         <div>
           <label className={labelClass}>มอบหมายให้</label>
-          <select value={assignedStaffId} onChange={(e) => setAssignedStaffId(e.target.value)} className={inputClass}>
+          <select
+            value={assignedStaffId}
+            onChange={(e) => setAssignedStaffId(e.target.value)}
+            disabled={!can(staff, "appointments.editAny")}
+            className={inputClass}
+          >
             <option value="">ไม่ระบุ</option>
             {staffList.map((s) => (
               <option key={s.id} value={s.id}>
@@ -198,13 +216,16 @@ export default function AppointmentFormPage() {
 
         {error && <p className="text-sm text-brand-red">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-lg bg-brand-navy py-3 text-sm font-semibold text-white hover:bg-brand-navy-light disabled:opacity-50"
-        >
-          {submitting ? "กำลังบันทึก..." : isEditing ? "บันทึกการแก้ไข" : "สร้างนัดหมาย"}
-        </button>
+        {!readOnly && (
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-lg bg-brand-navy py-3 text-sm font-semibold text-white hover:bg-brand-navy-light disabled:opacity-50"
+          >
+            {submitting ? "กำลังบันทึก..." : isEditing ? "บันทึกการแก้ไข" : "สร้างนัดหมาย"}
+          </button>
+        )}
+        </fieldset>
       </form>
     </div>
   );

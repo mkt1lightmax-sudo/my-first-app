@@ -2,7 +2,8 @@
 // คีย์ลับ (secret / token) เก็บในฐานข้อมูลเท่านั้น ไม่ส่งกลับไปที่หน้าเว็บ
 const express = require("express");
 const { query } = require("../db/pool");
-const { requireAuth, requireRole } = require("../middleware/auth");
+const { requireAuth } = require("../middleware/auth");
+const { requirePermission, requireOwner } = require("../lib/permissions");
 const line = require("../lib/line");
 const meta = require("../lib/meta");
 
@@ -19,16 +20,16 @@ function withWebhook(account) {
 }
 
 // ทุกคนที่ล็อกอินดูรายชื่อบัญชีได้ (ใช้กรองแชท) — ไม่มีคีย์ลับ
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", requireAuth, requirePermission("chat.view"), async (req, res) => {
   const result = await query(`SELECT ${PUBLIC_COLUMNS} FROM chat_accounts ORDER BY channel, id`);
   res.json({ ok: true, accounts: result.rows.map(withWebhook) });
 });
 
-// เพิ่มบัญชี — แอดมินเท่านั้น
+// เพิ่มบัญชี — เจ้าของเท่านั้น
 // LINE:      { channel: "line", name?, line_channel_secret, line_access_token }
 // Messenger: { channel: "messenger", name?, meta_page_token }
 // Instagram: { channel: "instagram", name?, meta_page_token }  (token ของเพจที่ผูกกับ IG)
-router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/", requireAuth, requireOwner, async (req, res) => {
   const body = req.body || {};
   const channel = body.channel;
   const trim = (v) => (typeof v === "string" ? v.trim() : "");
@@ -99,8 +100,8 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
   res.status(400).json({ ok: false, error: "channel ต้องเป็น line, messenger หรือ instagram" });
 });
 
-// เปลี่ยนชื่อ / เปิด-ปิดบัญชี / เปลี่ยน token — แอดมินเท่านั้น
-router.patch("/:id", requireAuth, requireRole("admin"), async (req, res) => {
+// เปลี่ยนชื่อ / เปิด-ปิดบัญชี / เปลี่ยน token — เจ้าของเท่านั้น
+router.patch("/:id", requireAuth, requireOwner, async (req, res) => {
   const body = req.body || {};
   const sets = [];
   const params = [req.params.id];
@@ -121,7 +122,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), async (req, res) => {
 });
 
 // ลบบัญชี — แชทเก่ายังอยู่ แต่จะตอบกลับไม่ได้แล้ว
-router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
   const result = await query("DELETE FROM chat_accounts WHERE id = $1 RETURNING id", [req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ ok: false, error: "account not found" });
   res.json({ ok: true });

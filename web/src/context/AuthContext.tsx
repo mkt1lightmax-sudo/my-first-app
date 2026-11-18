@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, SESSION_EXPIRED_EVENT } from "../lib/api";
 
-type Staff = { id: number; name: string; email: string; role: string };
+type Staff = { id: number; name: string; email: string; role: string; is_owner?: boolean };
 
 type AuthState = {
   staff: Staff | null;

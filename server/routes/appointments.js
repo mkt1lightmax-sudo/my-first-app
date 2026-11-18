@@ -1,6 +1,7 @@
 const express = require("express");
 const { query } = require("../db/pool");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { can, requirePermission } = require("../lib/permissions");
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ async function notifyAssignment(appointment, actingStaffId) {
   ]);
 }
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requirePermission("appointments.create"), async (req, res) => {
   const { type, customer_name, scheduled_start, scheduled_end } = req.body;
   if (!type || !customer_name || !scheduled_start || !scheduled_end) {
     return res.status(400).json({ ok: false, error: "type, customer_name, scheduled_start, scheduled_end is required" });
@@ -129,6 +130,17 @@ router.patch("/:id", requireAuth, async (req, res) => {
   const existing = await query("SELECT * FROM appointments WHERE id = $1", [req.params.id]);
   if (!existing.rows[0]) {
     return res.status(404).json({ ok: false, error: "appointment not found" });
+  }
+
+  // ผู้สำรวจ/ช่างติดตั้ง แก้ได้เฉพาะงานที่มอบหมายให้ตัวเอง และย้ายงานไปให้คนอื่นไม่ได้
+  if (!can(req.staff, "appointments.editAny")) {
+    const ownJob = can(req.staff, "appointments.editOwn") && existing.rows[0].assigned_staff_id === req.staff.id;
+    if (!ownJob) {
+      return res.status(403).json({ ok: false, error: "คุณไม่มีสิทธิ์แก้งานนี้" });
+    }
+    if ("assigned_staff_id" in req.body && Number(req.body.assigned_staff_id) !== req.staff.id) {
+      return res.status(403).json({ ok: false, error: "คุณย้ายงานไปให้คนอื่นไม่ได้" });
+    }
   }
 
   const setClauses = [];

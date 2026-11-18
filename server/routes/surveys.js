@@ -2,6 +2,7 @@ const express = require("express");
 const { query } = require("../db/pool");
 const { calculateSolarRecommendation } = require("../lib/solarCalculator");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { requirePermission } = require("../lib/permissions");
 
 const router = express.Router();
 
@@ -99,7 +100,7 @@ function tryCalculate(survey) {
   }
 }
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requirePermission("customers.edit"), async (req, res) => {
   if (!req.body.customer_name) {
     return res.status(400).json({ ok: false, error: "customer_name is required" });
   }
@@ -168,7 +169,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   res.json({ ok: true, survey, calculation });
 });
 
-router.patch("/:id", requireAuth, async (req, res) => {
+router.patch("/:id", requireAuth, requirePermission("customers.edit"), async (req, res) => {
   const existing = await query("SELECT * FROM surveys WHERE id = $1", [req.params.id]);
   if (!existing.rows[0]) {
     return res.status(404).json({ ok: false, error: "survey not found" });
@@ -201,7 +202,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
   res.json({ ok: true, survey: result.rows[0] });
 });
 
-router.post("/:id/calculate", requireAuth, async (req, res) => {
+router.post("/:id/calculate", requireAuth, requirePermission("customers.edit"), async (req, res) => {
   const existing = await query("SELECT * FROM surveys WHERE id = $1", [req.params.id]);
   if (!existing.rows[0]) {
     return res.status(404).json({ ok: false, error: "survey not found" });

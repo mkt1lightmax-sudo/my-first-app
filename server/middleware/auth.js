@@ -17,7 +17,7 @@ async function requireAuth(req, res, next) {
     return res.status(401).json({ ok: false, error: "invalid or expired session" });
   }
 
-  const result = await query("SELECT id, name, email, role FROM staff WHERE id = $1", [payload.id]);
+  const result = await query("SELECT id, name, email, role, is_owner FROM staff WHERE id = $1", [payload.id]);
   const staff = result.rows[0];
   if (!staff) {
     res.clearCookie(COOKIE_NAME);

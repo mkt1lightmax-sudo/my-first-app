@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { STAFF_ROLES, STAFF_ROLE_LABELS, type StaffRole } from "../../lib/staff";
+import { can, isOwner } from "../../lib/permissions";
 
 export default function StaffFormPage() {
   const { staff: currentStaff } = useAuth();
@@ -15,7 +16,7 @@ export default function StaffFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (currentStaff && currentStaff.role !== "admin") {
+  if (currentStaff && !can(currentStaff, "staff.manage")) {
     return <Navigate to="/" replace />;
   }
 
@@ -67,7 +68,7 @@ export default function StaffFormPage() {
         <div>
           <label className={labelClass}>ตำแหน่ง *</label>
           <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)} className={inputClass}>
-            {STAFF_ROLES.map((r) => (
+            {STAFF_ROLES.filter((r) => r !== "admin" || isOwner(currentStaff)).map((r) => (
               <option key={r} value={r}>
                 {STAFF_ROLE_LABELS[r]}
               </option>

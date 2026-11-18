@@ -4,10 +4,11 @@ import Logo from "./Logo";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { HomeIcon, UsersIcon, BriefcaseIcon, CalendarIcon, BellIcon, ChatIcon, UserIcon, UserPlusIcon, LogoutIcon } from "./icons";
-import { roleLabel } from "../lib/staff";
+import { staffRoleLabel } from "../lib/staff";
 import { formatNotificationTime, type Notification } from "../lib/notifications";
+import { can, isOwner } from "../lib/permissions";
 
-const tabs = [
+const allTabs = [
   { to: "/", label: "หน้าหลัก", icon: HomeIcon, end: true },
   { to: "/surveys", label: "ลูกค้า", icon: UsersIcon, end: false },
   { to: "/appointments", label: "งาน", icon: BriefcaseIcon, end: false },
@@ -17,6 +18,7 @@ const tabs = [
 
 export default function Layout() {
   const { staff, logout } = useAuth();
+  const tabs = allTabs.filter((t) => t.to !== "/chat" || can(staff, "chat.view"));
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -125,10 +127,10 @@ export default function Layout() {
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
             <div className="absolute right-4 top-14 z-20 w-56 rounded-xl border bg-white p-3 shadow-lg">
               <div className="font-medium text-gray-900">{staff?.name}</div>
-              <div className="text-xs text-gray-500">{staff ? roleLabel(staff.role) : ""}</div>
+              <div className="text-xs text-gray-500">{staff ? staffRoleLabel(staff) : ""}</div>
               <div className="mt-1 truncate text-xs text-gray-400">{staff?.email}</div>
 
-              {staff?.role === "admin" && (
+              {can(staff, "staff.manage") && (
                 <Link
                   to="/staff"
                   onClick={() => setMenuOpen(false)}
@@ -138,7 +140,7 @@ export default function Layout() {
                   จัดการพนักงาน
                 </Link>
               )}
-              {staff?.role === "admin" && (
+              {isOwner(staff) && (
                 <Link
                   to="/chat/accounts"
                   onClick={() => setMenuOpen(false)}

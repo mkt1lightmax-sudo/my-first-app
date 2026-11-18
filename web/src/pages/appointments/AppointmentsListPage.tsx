@@ -9,8 +9,11 @@ import {
   type Appointment,
 } from "../../lib/appointments";
 import { ChevronRightIcon } from "../../components/icons";
+import { useAuth } from "../../context/AuthContext";
+import { can } from "../../lib/permissions";
 
 export default function AppointmentsListPage() {
+  const { staff } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,9 +28,11 @@ export default function AppointmentsListPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">งาน / นัดหมาย</h1>
-        <Link to="/appointments/new" className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-medium text-white hover:bg-brand-navy-light">
-          + สร้างใหม่
-        </Link>
+        {can(staff, "appointments.create") && (
+          <Link to="/appointments/new" className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-medium text-white hover:bg-brand-navy-light">
+            + สร้างใหม่
+          </Link>
+        )}
       </div>
 
       {error && <p className="text-sm text-brand-red">{error}</p>}

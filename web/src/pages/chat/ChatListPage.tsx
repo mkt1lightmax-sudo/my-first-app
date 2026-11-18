@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { CHANNEL_COLORS, CHANNEL_LABELS, formatChatTime, type ChatAccount, type Conversation } from "../../lib/chat";
 import { UserIcon } from "../../components/icons";
 import { useAuth } from "../../context/AuthContext";
+import { can, isOwner } from "../../lib/permissions";
 
 type Filter = "all" | "mine" | "unassigned";
 
@@ -68,14 +69,15 @@ export default function ChatListPage() {
           </select>
         )}
       </div>
-      {staff?.role === "admin" && accounts.length === 0 && (
+      {staff && !can(staff, "chat.view") && <Navigate to="/" replace />}
+      {isOwner(staff) && accounts.length === 0 && (
         <Link to="/chat/accounts" className="mb-3 block rounded-lg bg-brand-navy/5 p-3 text-sm text-brand-navy">
           ยังไม่ได้เชื่อมบัญชี LINE / เพจ / IG — แตะที่นี่เพื่อเพิ่ม
         </Link>
       )}
 
       <div className="mb-2 flex gap-1 rounded-lg bg-gray-200 p-1">
-        {FILTERS.map((f) => (
+        {FILTERS.filter((f) => f.value !== "mine" || can(staff, "chat.reply")).map((f) => (
           <button
             key={f.value}
             onClick={() => setFilter(f.value)}

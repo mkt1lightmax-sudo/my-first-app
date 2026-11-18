@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
+import { can } from "../../lib/permissions";
 import { ROOF_DIRECTION_LABELS, type RoofDirection, type SolarCalcResult } from "../../lib/solar";
 import {
   SITE_TYPE_LABELS,
@@ -62,6 +64,8 @@ function listOrDash<T extends string>(v: T[] | null | undefined, labels: Record<
 }
 
 export default function SurveyDetailPage() {
+  const { staff } = useAuth();
+  const canEdit = can(staff, "customers.edit");
   const { id } = useParams();
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [calculation, setCalculation] = useState<SolarCalcResult | null>(null);
@@ -314,6 +318,7 @@ export default function SurveyDetailPage() {
       ) : null}
 
       <div className="flex gap-2">
+        {canEdit && (
         <button
           onClick={handleRecalculate}
           disabled={recalculating}
@@ -321,6 +326,7 @@ export default function SurveyDetailPage() {
         >
           {recalculating ? "กำลังคำนวณใหม่..." : "คำนวณใหม่"}
         </button>
+        )}
         <Link
           to={`/calculator?surveyId=${survey.id}`}
           className="rounded bg-brand-red px-4 py-2 text-sm font-medium text-white hover:bg-brand-red/90"
@@ -386,13 +392,15 @@ export default function SurveyDetailPage() {
             <CheckboxGroup value={documentsReceived} onChange={setDocumentsReceived} options={DOCUMENTS_RECEIVED_OPTIONS} labels={DOCUMENTS_RECEIVED_LABELS} />
           </div>
 
-          <button
-            onClick={handleSaveSummary}
-            disabled={savingSummary}
-            className="rounded bg-brand-navy px-4 py-2 text-sm font-medium text-white hover:bg-brand-navy-light disabled:opacity-50"
-          >
-            {savingSummary ? "กำลังบันทึก..." : "บันทึกสรุปสำหรับทีมประเมิน"}
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleSaveSummary}
+              disabled={savingSummary}
+              className="rounded bg-brand-navy px-4 py-2 text-sm font-medium text-white hover:bg-brand-navy-light disabled:opacity-50"
+            >
+              {savingSummary ? "กำลังบันทึก..." : "บันทึกสรุปสำหรับทีมประเมิน"}
+            </button>
+          )}
         </FormSection>
       </div>
     </div>

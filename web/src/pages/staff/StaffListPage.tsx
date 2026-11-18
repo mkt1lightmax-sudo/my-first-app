@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-import { roleLabel, type StaffMember } from "../../lib/staff";
+import { roleLabel, STAFF_ROLES, STAFF_ROLE_LABELS, type StaffMember, type StaffRole } from "../../lib/staff";
+import { can, isOwner } from "../../lib/permissions";
 
 export default function StaffListPage() {
   const { staff: currentStaff } = useAuth();
   const [staffList, setStaffList] = useState<StaffMember[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [changingId, setChangingId] = useState<number | null>(null);
 
   useEffect(() => {
     load();
@@ -34,7 +36,26 @@ export default function StaffListPage() {
     }
   }
 
-  if (currentStaff && currentStaff.role !== "admin") {
+  async function handleRoleChange(s: StaffMember, role: StaffRole) {
+    if (role === s.role) return;
+    if (!confirm(`เปลี่ยนตำแหน่งของ ${s.name} เป็น "${STAFF_ROLE_LABELS[role]}"?\nมีผลทันทีทุกเครื่องที่ล็อกอินอยู่`)) return;
+    setChangingId(s.id);
+    try {
+      await api.patch(`/staff/${s.id}`, { role });
+      load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "เปลี่ยนตำแหน่งไม่สำเร็จ");
+    } finally {
+      setChangingId(null);
+    }
+  }
+
+  // ใครแก้ใครได้: ไม่ใช่ตัวเอง, ไม่ใช่เจ้าของ, ถ้าเป็นแอดมินต้องให้เจ้าของจัดการ
+  const canManage = (s: StaffMember) =>
+    currentStaff?.id !== s.id && !s.is_owner && (s.role !== "admin" || isOwner(currentStaff));
+  const roleChoices = STAFF_ROLES.filter((r) => r !== "admin" || isOwner(currentStaff));
+
+  if (currentStaff && !can(currentStaff, "staff.manage")) {
     return <Navigate to="/" replace />;
   }
 
@@ -60,10 +81,26 @@ export default function StaffListPage() {
                 )}
               </div>
               <div className="mt-0.5 text-xs text-gray-500">
-                {s.email} · {roleLabel(s.role)}
+                {s.email}
+                {!canManage(s) && <> · {s.is_owner ? "เจ้าของ" : roleLabel(s.role)}</>}
               </div>
+              {canManage(s) && (
+                <select
+                  value={s.role}
+                  disabled={changingId === s.id}
+                  onChange={(e) => handleRoleChange(s, e.target.value as StaffRole)}
+                  className="mt-1.5 rounded-lg border px-2 py-1 text-xs text-brand-navy disabled:opacity-50"
+                  aria-label={`ตำแหน่งของ ${s.name}`}
+                >
+                  {roleChoices.map((r) => (
+                    <option key={r} value={r}>
+                      {STAFF_ROLE_LABELS[r]}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-            {currentStaff?.id !== s.id && !s.is_owner && (
+            {canManage(s) && (
               <button
                 onClick={() => handleDelete(s.id)}
                 disabled={deletingId === s.id}
