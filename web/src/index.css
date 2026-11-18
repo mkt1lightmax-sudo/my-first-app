@@ -4,9 +4,31 @@
   --color-brand-navy: #1a2456;
   --color-brand-navy-light: #2d3a7a;
   --color-brand-red: #e0342e;
+
+  /* ฟอนต์ไทยแบบไม่มีหัว ดูทันสมัย — ใช้ทั้งแอป */
+  --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 body {
   margin: 0;
   background: #f3f4f6;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ช่องกรอก/ปุ่มใช้ฟอนต์เดียวกับทั้งแอป */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* แถบเลื่อนแนวนอน (เช่น แถวแท็ก) ไม่ต้องโชว์ scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }

@@ -14,6 +14,51 @@ export type Conversation = {
   assigned_staff_id: number | null;
   assigned_staff_name: string | null;
   tags: string[];
+  status: "open" | "closed";
+  closed_at: string | null;
+  closed_by_name: string | null;
+  is_spam: boolean;
+  followed: boolean;
+  last_message_direction: "in" | "out" | null;
+};
+
+export type ChatCounts = { mine: number; open: number; unread: number };
+
+// ตัวกรองรายการแชท (ตรงกับ query string ของ GET /chat/conversations)
+export type ChatFilters = {
+  read: "" | "unread" | "read";
+  replied: "" | "no" | "yes";
+  sort: "new" | "old";
+  tag: string;
+  account: string;
+  followed: boolean;
+  unassigned: boolean;
+  spam: boolean;
+};
+
+export const EMPTY_FILTERS: ChatFilters = {
+  read: "",
+  replied: "",
+  sort: "new",
+  tag: "",
+  account: "",
+  followed: false,
+  unassigned: false,
+  spam: false,
+};
+
+export function countActiveFilters(f: ChatFilters) {
+  return [f.read, f.replied, f.sort === "old", f.tag, f.account, f.followed, f.unassigned, f.spam].filter(Boolean).length;
+}
+
+// ตัวอักษรบนจุดช่องทางที่มุมรูปโปรไฟล์
+export const CHANNEL_SHORT: Record<ChatChannel, string> = {
+  line: "L",
+  messenger: "f",
+  instagram: "IG",
+  tiktok: "T",
+  shopee: "S",
+  lazada: "Lz",
 };
 
 export type ChatAccount = {
@@ -35,7 +80,7 @@ export function metaReplyHoursLeft(c: Pick<Conversation, "channel" | "last_inbou
 
 export type ChatMessage = {
   id: number;
-  direction: "in" | "out";
+  direction: "in" | "out" | "system";
   message_type: string;
   text: string | null;
   created_at: string;
@@ -67,5 +112,9 @@ export function formatChatTime(iso: string | null) {
   if (d.toDateString() === now.toDateString()) {
     return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
   }
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "เมื่อวาน";
+  if (now.getTime() - d.getTime() < 6 * 86400000) return d.toLocaleDateString("th-TH", { weekday: "short" });
   return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 }

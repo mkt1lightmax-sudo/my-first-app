@@ -148,55 +148,181 @@ async function recordMessage({ account, userId, getProfile, direction, type, tex
   if (!inserted.rows[0]) return; // ส่งซ้ำ หรือเป็นข้อความที่แอปเราส่งเองและบันทึกไว้แล้ว
 
   if (direction === "in") {
+    // ลูกค้าทักมา = ยังไม่ได้ตอบ; ถ้าทิกเก็ตปิดอยู่จะเปิดขึ้นใหม่อัตโนมัติ
+    const before = (await query("SELECT status FROM chat_conversations WHERE id = $1", [convo.id])).rows[0];
     await query(
       `UPDATE chat_conversations
        SET last_message_preview = $2, last_message_at = $3, last_inbound_at = $3, unread_count = unread_count + 1,
+           last_message_direction = 'in', status = 'open', closed_at = NULL, closed_by_staff_id = NULL,
            reply_token = $4, reply_token_at = CASE WHEN $4::text IS NULL THEN NULL ELSE now() END
        WHERE id = $1`,
       [convo.id, text, at, replyToken]
     );
+    if (before?.status === "closed") await addSystemMessage(convo.id, "ลูกค้าทักมาใหม่ — เปิดทิกเก็ตอีกครั้งอัตโนมัติ");
   } else {
-    await query("UPDATE chat_conversations SET last_message_preview = $2, last_message_at = $3 WHERE id = $1", [convo.id, text, at]);
+    await query(
+      "UPDATE chat_conversations SET last_message_preview = $2, last_message_at = $3, last_message_direction = 'out' WHERE id = $1",
+      [convo.id, text, at]
+    );
   }
+}
+
+// ข้อความระบบในแชท เช่น "ปิดทิกเก็ตโดย ..." (แสดงตรงกลาง ลูกค้าไม่เห็น)
+function addSystemMessage(conversationId, text) {
+  return query("INSERT INTO chat_messages (conversation_id, direction, message_type, text) VALUES ($1, 'system', 'system', $2)", [
+    conversationId,
+    text,
+  ]);
 }
 
 // ---------- API สำหรับหน้าแชทในแอป (ต้องล็อกอิน) ----------
 const PRESET_TAGS = ["ลูกค้าใหม่", "สนใจ", "รอใบเสนอราคา", "นัดสำรวจแล้ว", "ปิดการขาย", "ไม่สนใจ"];
 
-const CONVO_FROM = `chat_conversations c
+// staffId มาจากฐานข้อมูล (ตัวเลขเสมอ) — แปลงเป็น Number อีกชั้นกันพลาด
+const convoFrom = (staffId) => `chat_conversations c
   LEFT JOIN staff s ON s.id = c.assigned_staff_id
-  LEFT JOIN chat_accounts a ON a.id = c.account_id`;
+  LEFT JOIN staff cs ON cs.id = c.closed_by_staff_id
+  LEFT JOIN chat_accounts a ON a.id = c.account_id
+  LEFT JOIN chat_follows f ON f.conversation_id = c.id AND f.staff_id = ${Number(staffId) || 0}`;
 
 const CONVO_COLUMNS = `c.id, c.channel, c.account_id, a.name AS account_name, c.display_name, c.picture_url,
-  c.last_message_preview, c.last_message_at, c.last_inbound_at, c.unread_count,
+  c.last_message_preview, c.last_message_at, c.last_inbound_at, c.unread_count, c.last_message_direction,
+  c.status, c.closed_at, cs.name AS closed_by_name, c.is_spam, (f.staff_id IS NOT NULL) AS followed,
   c.assigned_staff_id, s.name AS assigned_staff_name, c.tags`;
 
-function selectConvo(id) {
-  return query(`SELECT ${CONVO_COLUMNS} FROM ${CONVO_FROM} WHERE c.id = $1`, [id]).then((r) => r.rows[0]);
+function selectConvo(id, staffId) {
+  return query(`SELECT ${CONVO_COLUMNS} FROM ${convoFrom(staffId)} WHERE c.id = $1`, [id]).then((r) => r.rows[0]);
 }
 
-// รายการแชท — กรองได้: ?filter=mine|unassigned  ?tag=ชื่อป้าย  ?staff=ไอดีพนักงาน  ?account=ไอดีบัญชี
+// รายการแชท (ทิกเก็ต) — ตัวกรองทั้งหมดเป็น query string:
+//   view=mine|all|closed  (ค่าเริ่มต้น all = ทิกเก็ตที่เปิดอยู่ทั้งหมด)
+//   read=unread|read   replied=yes|no   sort=new|old   q=คำค้น   followed=1   spam=1
+//   tag=ชื่อป้าย   account=ไอดีบัญชี   filter=unassigned
 router.get("/conversations", requireAuth, requirePermission("chat.view"), async (req, res) => {
+  const q = req.query;
   const where = [];
   const params = [];
   const add = (sql, value) => {
     params.push(value);
-    where.push(sql.replace("?", `$${params.length}`));
+    where.push(sql.replaceAll("?", `$${params.length}`));
   };
   if (!can(req.staff, "chat.viewAll")) add("(c.assigned_staff_id IS NULL OR c.assigned_staff_id = ?)", req.staff.id);
-  if (req.query.filter === "mine") add("c.assigned_staff_id = ?", req.staff.id);
-  else if (req.query.filter === "unassigned") where.push("c.assigned_staff_id IS NULL");
-  if (req.query.staff) add("c.assigned_staff_id = ?", Number(req.query.staff));
-  if (req.query.account) add("c.account_id = ?", Number(req.query.account));
-  if (req.query.tag) add("? = ANY(c.tags)", String(req.query.tag));
 
+  where.push(q.spam === "1" ? "c.is_spam" : "NOT c.is_spam");
+  if (q.view === "closed") where.push("c.status = 'closed'");
+  else where.push("c.status = 'open'");
+  if (q.view === "mine") add("c.assigned_staff_id = ?", req.staff.id);
+  if (q.filter === "unassigned") where.push("c.assigned_staff_id IS NULL");
+  if (q.read === "unread") where.push("c.unread_count > 0");
+  if (q.read === "read") where.push("c.unread_count = 0");
+  if (q.replied === "no") where.push("c.last_message_direction = 'in'");
+  if (q.replied === "yes") where.push("c.last_message_direction = 'out'");
+  if (q.followed === "1") where.push("f.staff_id IS NOT NULL");
+  if (q.account) add("c.account_id = ?", Number(q.account));
+  if (q.tag) add("? = ANY(c.tags)", String(q.tag));
+  if (q.q && String(q.q).trim()) {
+    // ค้นจากชื่อลูกค้า หรือข้อความในแชท
+    add(
+      `(c.display_name ILIKE ? OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.conversation_id = c.id AND m.text ILIKE ?))`,
+      `%${String(q.q).trim().replace(/[%_\\]/g, "\\$&")}%`
+    );
+  }
+
+  const order = q.sort === "old" ? "ASC" : "DESC";
   const result = await query(
-    `SELECT ${CONVO_COLUMNS} FROM ${CONVO_FROM}
-     ${where.length ? "WHERE " + where.join(" AND ") : ""}
-     ORDER BY c.last_message_at DESC NULLS LAST LIMIT 200`,
+    `SELECT ${CONVO_COLUMNS} FROM ${convoFrom(req.staff.id)}
+     WHERE ${where.join(" AND ")}
+     ORDER BY c.last_message_at ${order} NULLS LAST LIMIT 200`,
     params
   );
-  res.json({ ok: true, conversations: result.rows });
+
+  // ตัวเลขบนแท็บ: ทิกเก็ตเปิดของฉัน / ทิกเก็ตเปิดทั้งหมดที่ฉันเห็น / ยังไม่อ่าน
+  const scope = can(req.staff, "chat.viewAll") ? "" : `AND (assigned_staff_id IS NULL OR assigned_staff_id = $1)`;
+  const counts = (
+    await query(
+      `SELECT COUNT(*) FILTER (WHERE assigned_staff_id = $1)::int AS mine,
+              COUNT(*)::int AS open,
+              COUNT(*) FILTER (WHERE unread_count > 0)::int AS unread
+       FROM chat_conversations WHERE status = 'open' AND NOT is_spam ${scope}`,
+      [req.staff.id]
+    )
+  ).rows[0];
+
+  res.json({ ok: true, conversations: result.rows, counts });
+});
+
+// ---------- การจัดการทิกเก็ต ----------
+async function loadForAction(req, res, permission) {
+  if (!can(req.staff, permission)) {
+    res.status(403).json({ ok: false, error: "คุณไม่มีสิทธิ์ทำรายการนี้" });
+    return null;
+  }
+  const convo = (await query("SELECT * FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
+  if (!convo) {
+    res.status(404).json({ ok: false, error: "conversation not found" });
+    return null;
+  }
+  if (!canSeeConvo(req.staff, convo)) {
+    res.status(403).json(NOT_YOURS);
+    return null;
+  }
+  return convo;
+}
+
+const thaiTime = () => new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" });
+
+router.post("/conversations/:id/close", requireAuth, async (req, res) => {
+  const convo = await loadForAction(req, res, "chat.reply");
+  if (!convo) return;
+  if (convo.status !== "closed") {
+    await query("UPDATE chat_conversations SET status = 'closed', closed_at = now(), closed_by_staff_id = $2, unread_count = 0 WHERE id = $1", [
+      convo.id,
+      req.staff.id,
+    ]);
+    await addSystemMessage(convo.id, `ปิดทิกเก็ตโดย ${req.staff.name} เมื่อ ${thaiTime()}`);
+  }
+  res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
+});
+
+router.post("/conversations/:id/reopen", requireAuth, async (req, res) => {
+  const convo = await loadForAction(req, res, "chat.reply");
+  if (!convo) return;
+  if (convo.status === "closed") {
+    await query("UPDATE chat_conversations SET status = 'open', closed_at = NULL, closed_by_staff_id = NULL WHERE id = $1", [convo.id]);
+    await addSystemMessage(convo.id, `เปิดทิกเก็ตอีกครั้งโดย ${req.staff.name} เมื่อ ${thaiTime()}`);
+  }
+  res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
+});
+
+router.post("/conversations/:id/unread", requireAuth, async (req, res) => {
+  const convo = await loadForAction(req, res, "chat.reply");
+  if (!convo) return;
+  await query("UPDATE chat_conversations SET unread_count = GREATEST(unread_count, 1) WHERE id = $1", [convo.id]);
+  res.json({ ok: true });
+});
+
+// body: { spam: true|false } — สแปมจะถูกซ่อนจากรายการปกติ
+router.post("/conversations/:id/spam", requireAuth, async (req, res) => {
+  const convo = await loadForAction(req, res, "chat.reply");
+  if (!convo) return;
+  const spam = req.body?.spam !== false;
+  await query("UPDATE chat_conversations SET is_spam = $2, unread_count = CASE WHEN $2 THEN 0 ELSE unread_count END WHERE id = $1", [
+    convo.id,
+    spam,
+  ]);
+  res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
+});
+
+// body: { follow: true|false } — ติดตามของแต่ละคน (ดูเท่านั้นก็ติดตามได้)
+router.post("/conversations/:id/follow", requireAuth, async (req, res) => {
+  const convo = await loadForAction(req, res, "chat.view");
+  if (!convo) return;
+  if (req.body?.follow === false) {
+    await query("DELETE FROM chat_follows WHERE staff_id = $1 AND conversation_id = $2", [req.staff.id, convo.id]);
+  } else {
+    await query("INSERT INTO chat_follows (staff_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [req.staff.id, convo.id]);
+  }
+  res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
 });
 
 // ป้ายทั้งหมด (ป้ายตั้งต้น + ป้ายที่ทีมสร้างเอง)
@@ -240,11 +366,11 @@ router.patch("/conversations/:id", requireAuth, requirePermission("chat.reply"),
     );
   }
 
-  res.json({ ok: true, conversation: await selectConvo(convo.id) });
+  res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
 });
 
 router.get("/conversations/:id/messages", requireAuth, requirePermission("chat.view"), async (req, res) => {
-  const convo = await selectConvo(req.params.id);
+  const convo = await selectConvo(req.params.id, req.staff.id);
   if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
   if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
 
@@ -267,6 +393,9 @@ router.post("/conversations/:id/messages", requireAuth, requirePermission("chat.
   const convo = (await query("SELECT * FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
   if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
   if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
+  if (convo.status === "closed") {
+    return res.status(400).json({ ok: false, error: "ทิกเก็ตนี้ปิดแล้ว — กด \"เปิดอีกครั้ง\" ก่อนตอบ" });
+  }
   const account = convo.account_id ? await getAccount(convo.account_id) : null;
   if (!account || !account.is_active) {
     return res.status(400).json({ ok: false, error: "บัญชีของแชทนี้ถูกลบหรือปิดใช้งานแล้ว ตอบกลับไม่ได้" });
@@ -302,7 +431,7 @@ router.post("/conversations/:id/messages", requireAuth, requirePermission("chat.
       [convo.id, text, req.staff.id, externalId]
     )
   ).rows[0];
-  await query("UPDATE chat_conversations SET last_message_preview = $2, last_message_at = now() WHERE id = $1", [convo.id, text]);
+  await query("UPDATE chat_conversations SET last_message_preview = $2, last_message_at = now(), last_message_direction = 'out' WHERE id = $1", [convo.id, text]);
 
   res.json({ ok: true, message: { ...msg, staff_name: req.staff.name } });
 });
