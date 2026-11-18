@@ -8,7 +8,8 @@ import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
 import { useAuth } from "../../context/AuthContext";
 import { can } from "../../lib/permissions";
-import { BookmarkIcon, CheckCircleIcon, ChevronLeftIcon, MoreIcon, SendIcon } from "../../components/icons";
+import { BookmarkIcon, CheckCircleIcon, ChevronLeftIcon, ImageIcon, MoreIcon, SendIcon } from "../../components/icons";
+import { blobToBase64, prepareImage, type PreparedImage } from "../../lib/imageResize";
 
 export default function ChatThreadPage() {
   const { id } = useParams();
@@ -19,6 +20,8 @@ export default function ChatThreadPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState<PreparedImage | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -50,6 +53,42 @@ export default function ChatThreadPage() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  // แนบรูป: เลือก → ย่อในเครื่อง → ดูตัวอย่าง → ส่ง
+  async function pickImage(file: File) {
+    setError(null);
+    try {
+      setPending(await prepareImage(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เปิดรูปไม่สำเร็จ");
+    }
+  }
+
+  function cancelImage() {
+    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    setPending(null);
+    setError(null);
+  }
+
+  async function sendImage() {
+    if (!pending || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const data = await blobToBase64(pending.blob);
+      const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/images`, {
+        data,
+        contentType: pending.contentType,
+      });
+      setMessages((prev) => [...prev, d.message]);
+      URL.revokeObjectURL(pending.previewUrl);
+      setPending(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "ส่งรูปไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function handleSend(e: FormEvent) {
     e.preventDefault();
@@ -238,6 +277,27 @@ export default function ChatThreadPage() {
         </div>
       ) : (
         <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-gray-100 bg-white px-3 py-2.5">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = ""; // เลือกรูปเดิมซ้ำได้
+              if (f) pickImage(f);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={sending}
+            aria-label="แนบรูป"
+            title="แนบรูป"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-gray-500 transition active:bg-gray-100 disabled:opacity-40"
+          >
+            <ImageIcon className="h-6 w-6" />
+          </button>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -261,6 +321,33 @@ export default function ChatThreadPage() {
             <SendIcon className="h-5 w-5" />
           </button>
         </form>
+      )}
+
+      {/* ดูรูปก่อนส่ง */}
+      {pending && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black">
+          <div className="flex items-center justify-between p-4 text-white">
+            <button onClick={cancelImage} disabled={sending} className="text-sm disabled:opacity-50">
+              ยกเลิก
+            </button>
+            <span className="text-sm text-white/70">ส่งรูปให้ {conversation?.display_name || "ลูกค้า"}</span>
+            <span className="w-10" />
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+            <img src={pending.previewUrl} alt="รูปที่จะส่ง" className="max-h-full max-w-full rounded-xl object-contain" />
+          </div>
+          {error && <p className="px-6 pb-2 text-center text-sm text-red-300">{error}</p>}
+          <div className="p-4 pb-8">
+            <button
+              onClick={sendImage}
+              disabled={sending}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 text-sm font-semibold text-brand-navy disabled:opacity-60"
+            >
+              <SendIcon className="h-4 w-4" />
+              {sending ? "กำลังส่ง..." : `ส่งรูป (${(pending.blob.size / 1024 / 1024).toFixed(1)} MB)`}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

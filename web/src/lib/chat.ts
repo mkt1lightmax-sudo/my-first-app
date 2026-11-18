@@ -108,6 +108,7 @@ export type ChatMessage = {
     title?: string;
     url?: string | null;
     externalUrl?: string;
+    mediaToken?: string; // รูปที่พนักงานส่งจากแอปเรา
   } | null;
   created_at: string;
   staff_name?: string | null;

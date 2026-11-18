@@ -4,7 +4,9 @@ import type { ChatMessage } from "../../lib/chat";
 // แสดงเนื้อหาข้อความตามชนิด: ข้อความ / รูป / สติกเกอร์ / วิดีโอ / เสียง / ไฟล์ / แผนที่
 // ไฟล์จริงดึงผ่าน /api/chat/messages/:id/content (เซิร์ฟเวอร์เราไปดึงจาก LINE / Meta ให้)
 
-const mediaUrl = (m: ChatMessage) => `/api/chat/messages/${m.id}/content`;
+// รูปที่เราส่งเอง เก็บไว้ที่ /api/chat/media/<token>; รูปจากลูกค้าดึงผ่าน /api/chat/messages/:id/content
+const mediaUrl = (m: ChatMessage) =>
+  m.meta?.mediaToken ? `/api/chat/media/${m.meta.mediaToken}` : `/api/chat/messages/${m.id}/content`;
 
 // สติกเกอร์ LINE ดึงรูปจาก CDN สาธารณะของ LINE ได้ด้วยรหัสสติกเกอร์
 function lineStickerUrl(m: ChatMessage) {

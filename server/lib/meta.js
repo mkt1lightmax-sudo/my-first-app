@@ -58,6 +58,19 @@ async function send(token, userId, text) {
   return data.message_id || null;
 }
 
+// ส่งรูปให้ลูกค้า (Messenger / IG) — Meta ดึงรูปจากลิงก์ https สาธารณะเอง
+async function sendImage(token, userId, url) {
+  const data = await graphFetch(token, "/me/messages", {
+    method: "POST",
+    body: JSON.stringify({
+      recipient: { id: userId },
+      messaging_type: "RESPONSE",
+      message: { attachment: { type: "image", payload: { url, is_reusable: false } } },
+    }),
+  });
+  return data.message_id || null;
+}
+
 // ใช้ตอนแอดมินเพิ่มบัญชี — เช็กว่า token ใช้ได้ และหาไอดีเพจ + IG ที่ผูกอยู่
 function getPageInfo(token) {
   return graphFetch(token, "/me?fields=id,name,instagram_business_account{id,username}");
@@ -89,4 +102,4 @@ function messageMeta(message) {
   return { url: att.payload?.url || null, stickerId: att.payload?.sticker_id || null, title: att.payload?.title || null };
 }
 
-module.exports = { verifySignature, getProfile, send, getPageInfo, messageToText, messageMeta, REPLY_WINDOW_MS };
+module.exports = { verifySignature, getProfile, send, sendImage, getPageInfo, messageToText, messageMeta, REPLY_WINDOW_MS };

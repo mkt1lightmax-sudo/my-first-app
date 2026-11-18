@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const { query } = require("../db/pool");
 const { requireAuth } = require("../middleware/auth");
@@ -517,71 +518,138 @@ router.get("/messages/:id/content", requireAuth, requirePermission("chat.view"),
 });
 
 // ส่งข้อความตอบลูกค้า — ส่งออกทางบัญชีเดียวกับที่ลูกค้าทักเข้ามา
+// เช็กร่วมกันก่อนส่งทุกแบบ (ข้อความ/รูป): สิทธิ์, ทิกเก็ตเปิดอยู่, บัญชียังใช้ได้, กฎ 24 ชม. ของ Meta
+// คืน { convo, account } หรือ null (ตอบ error ไปแล้ว)
+async function loadForSend(req, res) {
+  const convo = (await query("SELECT * FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
+  if (!convo) return void res.status(404).json({ ok: false, error: "conversation not found" });
+  if (!canSeeConvo(req.staff, convo)) return void res.status(403).json(NOT_YOURS);
+  if (convo.status === "closed") {
+    return void res.status(400).json({ ok: false, error: "ทิกเก็ตนี้ปิดแล้ว — กด \"เปิดอีกครั้ง\" ก่อนตอบ" });
+  }
+  const account = convo.account_id ? await getAccount(convo.account_id) : null;
+  if (!account || !account.is_active) {
+    return void res.status(400).json({ ok: false, error: "บัญชีของแชทนี้ถูกลบหรือปิดใช้งานแล้ว ตอบกลับไม่ได้" });
+  }
+  if (account.channel !== "line") {
+    const last = convo.last_inbound_at ? new Date(convo.last_inbound_at).getTime() : 0;
+    if (Date.now() - last > meta.REPLY_WINDOW_MS) {
+      return void res.status(400).json({ ok: false, error: "ลูกค้าทักมาเกิน 24 ชม.แล้ว Meta ไม่อนุญาตให้ตอบ ต้องรอให้ลูกค้าทักมาใหม่" });
+    }
+  }
+  return { convo, account };
+}
+
+// บันทึกข้อความขาออก — Meta จะส่ง echo กลับมาที่ webhook ด้วย ใช้ message id เดียวกันจึงไม่บันทึกซ้ำ
+async function saveOutgoing({ convo, staff, type, text, msgMeta = null, externalId = null }) {
+  const msg = (
+    await query(
+      `INSERT INTO chat_messages (conversation_id, direction, message_type, text, meta, sent_by_staff_id, external_message_id)
+       VALUES ($1, 'out', $2, $3, $4, $5, $6)
+       ON CONFLICT (external_message_id) WHERE external_message_id IS NOT NULL
+       DO UPDATE SET sent_by_staff_id = EXCLUDED.sent_by_staff_id, meta = COALESCE(EXCLUDED.meta, chat_messages.meta)
+       RETURNING id, direction, message_type, text, meta, created_at`,
+      [convo.id, type, text, msgMeta ? JSON.stringify(msgMeta) : null, staff.id, externalId]
+    )
+  ).rows[0];
+  await query(
+    "UPDATE chat_conversations SET last_message_preview = $2, last_message_at = now(), last_message_direction = 'out' WHERE id = $1",
+    [convo.id, text]
+  );
+  return { ...msg, staff_name: staff.name };
+}
+
 router.post("/conversations/:id/messages", requireAuth, requirePermission("chat.reply"), async (req, res) => {
   const text = (req.body?.text || "").trim();
   if (!text) return res.status(400).json({ ok: false, error: "text is required" });
   if (text.length > 2000) return res.status(400).json({ ok: false, error: "ข้อความยาวเกิน 2000 ตัวอักษร" });
 
-  const convo = (await query("SELECT * FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
-  if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
-  if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
-  if (convo.status === "closed") {
-    return res.status(400).json({ ok: false, error: "ทิกเก็ตนี้ปิดแล้ว — กด \"เปิดอีกครั้ง\" ก่อนตอบ" });
-  }
-  const account = convo.account_id ? await getAccount(convo.account_id) : null;
-  if (!account || !account.is_active) {
-    return res.status(400).json({ ok: false, error: "บัญชีของแชทนี้ถูกลบหรือปิดใช้งานแล้ว ตอบกลับไม่ได้" });
-  }
+  const ctx = await loadForSend(req, res);
+  if (!ctx) return;
+  const { convo, account } = ctx;
 
   let externalId = null;
   try {
-    if (account.channel === "line") {
-      await sendLine(account, convo, text);
-    } else {
-      const last = convo.last_inbound_at ? new Date(convo.last_inbound_at).getTime() : 0;
-      if (Date.now() - last > meta.REPLY_WINDOW_MS) {
-        return res.status(400).json({
-          ok: false,
-          error: "ลูกค้าทักมาเกิน 24 ชม.แล้ว Meta ไม่อนุญาตให้ตอบ ต้องรอให้ลูกค้าทักมาใหม่",
-        });
-      }
-      externalId = await meta.send(account.meta_page_token, convo.external_user_id, text);
-    }
+    if (account.channel === "line") await sendLine(account, convo, text);
+    else externalId = await meta.send(account.meta_page_token, convo.external_user_id, text);
   } catch (err) {
     console.error("send chat error:", err);
     return res.status(502).json({ ok: false, error: `ส่งข้อความไป ${account.name} ไม่สำเร็จ` });
   }
 
-  // Meta จะส่ง echo ของข้อความนี้กลับมาที่ webhook ด้วย — ใช้ message id เดียวกันจึงไม่บันทึกซ้ำ
-  const msg = (
-    await query(
-      `INSERT INTO chat_messages (conversation_id, direction, message_type, text, sent_by_staff_id, external_message_id)
-       VALUES ($1, 'out', 'text', $2, $3, $4)
-       ON CONFLICT (external_message_id) WHERE external_message_id IS NOT NULL
-       DO UPDATE SET sent_by_staff_id = EXCLUDED.sent_by_staff_id
-       RETURNING id, direction, message_type, text, created_at`,
-      [convo.id, text, req.staff.id, externalId]
-    )
-  ).rows[0];
-  await query("UPDATE chat_conversations SET last_message_preview = $2, last_message_at = now(), last_message_direction = 'out' WHERE id = $1", [convo.id, text]);
-
-  res.json({ ok: true, message: { ...msg, staff_name: req.staff.name } });
+  res.json({ ok: true, message: await saveOutgoing({ convo, staff: req.staff, type: "text", text, externalId }) });
 });
 
-async function sendLine(account, convo, text) {
+// ส่งรูปให้ลูกค้า — body: { data: "<base64>", contentType: "image/jpeg" | "image/png" }
+// หน้าเว็บย่อรูปก่อนส่งแล้ว; เก็บรูปไว้ที่เรา แล้วให้ LINE / Meta ดึงผ่านลิงก์สุ่ม /api/chat/media/<token>
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+router.post("/conversations/:id/images", requireAuth, requirePermission("chat.reply"), async (req, res) => {
+  const contentType = req.body?.contentType;
+  if (contentType !== "image/jpeg" && contentType !== "image/png") {
+    return res.status(400).json({ ok: false, error: "รองรับเฉพาะรูป JPG หรือ PNG" });
+  }
+  const bytes = Buffer.from(String(req.body?.data || ""), "base64");
+  if (!bytes.length) return res.status(400).json({ ok: false, error: "ไม่พบรูป" });
+  if (bytes.length > MAX_IMAGE_BYTES) return res.status(400).json({ ok: false, error: "รูปใหญ่เกิน 3MB" });
+  // ตรวจว่าเป็นรูปจริงตามที่บอก (ดูจากหัวไฟล์)
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
+  const isPng = bytes.subarray(0, 4).toString("hex") === "89504e47";
+  if ((contentType === "image/jpeg" && !isJpeg) || (contentType === "image/png" && !isPng)) {
+    return res.status(400).json({ ok: false, error: "ไฟล์ไม่ใช่รูปที่ถูกต้อง" });
+  }
+
+  const ctx = await loadForSend(req, res);
+  if (!ctx) return;
+  const { convo, account } = ctx;
+
+  const token = crypto.randomBytes(24).toString("hex");
+  await query(
+    "INSERT INTO chat_media (token, conversation_id, content_type, bytes, size, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6)",
+    [token, convo.id, contentType, bytes, bytes.length, req.staff.id]
+  );
+  const proto = req.get("x-forwarded-proto") || req.protocol;
+  const url = `${proto}://${req.get("x-forwarded-host") || req.get("host")}/api/chat/media/${token}`;
+
+  let externalId = null;
+  try {
+    if (account.channel === "line") await sendLine(account, convo, line.imageMessage(url));
+    else externalId = await meta.sendImage(account.meta_page_token, convo.external_user_id, url);
+  } catch (err) {
+    console.error("send image error:", err);
+    await query("DELETE FROM chat_media WHERE token = $1", [token]);
+    return res.status(502).json({ ok: false, error: `ส่งรูปไป ${account.name} ไม่สำเร็จ` });
+  }
+
+  const message = await saveOutgoing({ convo, staff: req.staff, type: "image", text: "[รูปภาพ]", msgMeta: { mediaToken: token }, externalId });
+  res.json({ ok: true, message });
+});
+
+// ลิงก์รูปที่เราส่งให้ลูกค้า — เปิดได้โดยไม่ต้องล็อกอิน เพราะ LINE / Meta ต้องดึงรูปจากที่นี่
+// ปลอดภัยด้วยรหัสสุ่ม 48 ตัวที่เดาไม่ได้
+router.get("/media/:token", async (req, res) => {
+  if (!/^[a-f0-9]{48}$/.test(req.params.token)) return res.status(404).end();
+  const m = (await query("SELECT content_type, bytes FROM chat_media WHERE token = $1", [req.params.token])).rows[0];
+  if (!m) return res.status(404).end();
+  res.set("Content-Type", m.content_type);
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.send(m.bytes);
+});
+
+// message: ข้อความตัวอักษร (string) หรือข้อความแบบอื่นของ LINE (เช่น รูป)
+async function sendLine(account, convo, message) {
   const tokenFresh =
     convo.reply_token && convo.reply_token_at && Date.now() - new Date(convo.reply_token_at).getTime() < REPLY_TOKEN_MAX_AGE_MS;
   if (tokenFresh) {
     // ใช้ reply token ทันที (ฟรี) — ล้างทิ้งก่อนส่ง เพราะใช้ได้ครั้งเดียว
     await query("UPDATE chat_conversations SET reply_token = NULL WHERE id = $1", [convo.id]);
     try {
-      await line.reply(account.line_access_token, convo.reply_token, text);
+      await line.reply(account.line_access_token, convo.reply_token, message);
       return;
     } catch {
       // token หมดอายุ — ไปส่งแบบ push แทน
     }
   }
-  await line.push(account.line_access_token, convo.external_user_id, text);
+  await line.push(account.line_access_token, convo.external_user_id, message);
 }
 
 module.exports = router;

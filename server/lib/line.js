@@ -36,20 +36,28 @@ async function getProfile(token, userId) {
   }
 }
 
+// message: ข้อความเดียว (string = ข้อความตัวอักษร หรือ object ตามรูปแบบของ LINE เช่น รูปภาพ)
+const toLineMessage = (m) => (typeof m === "string" ? { type: "text", text: m } : m);
+
 // ตอบด้วย reply token (ฟรี ไม่นับโควต้า) — ใช้ได้ครั้งเดียวและต้องใช้ภายในเวลาสั้นๆ
-function reply(token, replyToken, text) {
+function reply(token, replyToken, message) {
   return lineFetch(token, "/message/reply", {
     method: "POST",
-    body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
+    body: JSON.stringify({ replyToken, messages: [toLineMessage(message)] }),
   });
 }
 
 // ส่งข้อความหาลูกค้าเมื่อไหร่ก็ได้ — นับโควต้าข้อความรายเดือนของ OA
-function push(token, userId, text) {
+function push(token, userId, message) {
   return lineFetch(token, "/message/push", {
     method: "POST",
-    body: JSON.stringify({ to: userId, messages: [{ type: "text", text }] }),
+    body: JSON.stringify({ to: userId, messages: [toLineMessage(message)] }),
   });
+}
+
+// ข้อความรูปภาพ — LINE จะดึงรูปจากลิงก์ https สาธารณะเอง
+function imageMessage(url) {
+  return { type: "image", originalContentUrl: url, previewImageUrl: url };
 }
 
 // ใช้ตอนแอดมินเพิ่มบัญชี — เช็กว่า token ใช้ได้ และเอาชื่อ OA มาแสดง
@@ -108,4 +116,4 @@ function messageToText(message) {
   return TYPE_LABELS[message.type] || `[${message.type}]`;
 }
 
-module.exports = { verifySignature, getProfile, reply, push, getBotInfo, messageToText, messageMeta, getContent };
+module.exports = { verifySignature, getProfile, reply, push, imageMessage, getBotInfo, messageToText, messageMeta, getContent };
