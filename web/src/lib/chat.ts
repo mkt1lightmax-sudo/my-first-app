@@ -96,6 +96,19 @@ export type ChatMessage = {
   direction: "in" | "out" | "system";
   message_type: string;
   text: string | null;
+  meta?: {
+    stickerId?: string | number;
+    packageId?: string;
+    resourceType?: string;
+    fileName?: string;
+    fileSize?: number;
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    title?: string;
+    url?: string | null;
+    externalUrl?: string;
+  } | null;
   created_at: string;
   staff_name?: string | null;
 };

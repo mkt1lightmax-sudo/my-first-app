@@ -66,6 +66,41 @@ const TYPE_LABELS = {
   sticker: "[สติกเกอร์]",
 };
 
+// ข้อมูลเสริมที่ต้องใช้แสดงผล (สติกเกอร์ / ไฟล์ / แผนที่ / รูปจากลิงก์ภายนอก)
+function messageMeta(message) {
+  switch (message.type) {
+    case "sticker":
+      return { stickerId: message.stickerId, packageId: message.packageId, resourceType: message.stickerResourceType };
+    case "file":
+      return { fileName: message.fileName, fileSize: message.fileSize };
+    case "location":
+      return { latitude: message.latitude, longitude: message.longitude, address: message.address, title: message.title };
+    case "image":
+    case "video":
+    case "audio":
+      // ส่วนใหญ่ไฟล์อยู่ที่ LINE (ดึงผ่าน getContent); บางครั้งเป็นลิงก์ภายนอก
+      return message.contentProvider?.type === "external"
+        ? { externalUrl: message.contentProvider.originalContentUrl, previewUrl: message.contentProvider.previewImageUrl }
+        : { duration: message.duration };
+    default:
+      return null;
+  }
+}
+
+// ดาวน์โหลดรูป/วิดีโอ/ไฟล์ที่ลูกค้าส่งมา (LINE เก็บไว้ให้ระยะหนึ่งเท่านั้น)
+async function getContent(token, messageId) {
+  if (!token) throw new Error("LINE access token is missing for this account");
+  const res = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(messageId)}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = new Error(`LINE content ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res;
+}
+
 function messageToText(message) {
   if (message.type === "text") return message.text;
   if (message.type === "location") return `[ตำแหน่ง] ${message.address || message.title || ""}`.trim();
@@ -73,4 +108,4 @@ function messageToText(message) {
   return TYPE_LABELS[message.type] || `[${message.type}]`;
 }
 
-module.exports = { verifySignature, getProfile, reply, push, getBotInfo, messageToText };
+module.exports = { verifySignature, getProfile, reply, push, getBotInfo, messageToText, messageMeta, getContent };

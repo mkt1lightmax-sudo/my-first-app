@@ -251,3 +251,6 @@ CREATE TABLE IF NOT EXISTS chat_deals (
 
 CREATE INDEX IF NOT EXISTS idx_chat_deals_updated ON chat_deals(updated_at);
 CREATE INDEX IF NOT EXISTS idx_chat_deals_staff ON chat_deals(staff_id);
+
+-- ข้อมูลเสริมของข้อความ เช่น รหัสสติกเกอร์, ชื่อไฟล์, ลิงก์รูปของ Meta, พิกัดแผนที่
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS meta JSONB;

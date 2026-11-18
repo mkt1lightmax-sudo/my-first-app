@@ -82,4 +82,11 @@ function messageToText(message) {
   return "[ข้อความ]";
 }
 
-module.exports = { verifySignature, getProfile, send, getPageInfo, messageToText, REPLY_WINDOW_MS };
+// ลิงก์ไฟล์แนบของ Meta (รูป/วิดีโอ/สติกเกอร์) — ลิงก์อาจหมดอายุหลังผ่านไประยะหนึ่ง
+function messageMeta(message) {
+  const att = message.attachments?.[0];
+  if (!att) return null;
+  return { url: att.payload?.url || null, stickerId: att.payload?.sticker_id || null, title: att.payload?.title || null };
+}
+
+module.exports = { verifySignature, getProfile, send, getPageInfo, messageToText, messageMeta, REPLY_WINDOW_MS };

@@ -58,6 +58,7 @@ async function handleLineEvent(account, event) {
     direction: "in",
     type: event.message.type,
     text: line.messageToText(event.message),
+    meta: line.messageMeta(event.message),
     externalId: event.message.id,
     at: new Date(event.timestamp || Date.now()),
     replyToken: event.replyToken || null,
@@ -116,13 +117,14 @@ async function handleMetaEvent(account, event) {
     direction: isEcho ? "out" : "in",
     type: message.text ? "text" : message.attachments?.[0]?.type || "unknown",
     text: meta.messageToText(message),
+    meta: meta.messageMeta(message),
     externalId: message.mid,
     at: new Date(event.timestamp || Date.now()),
   });
 }
 
 // บันทึกข้อความเข้าฐานข้อมูล (ใช้ร่วมกันทุกช่องทาง) — ข้อความซ้ำจะถูกข้าม
-async function recordMessage({ account, userId, getProfile, direction, type, text, externalId, at, replyToken = null }) {
+async function recordMessage({ account, userId, getProfile, direction, type, text, meta: msgMeta = null, externalId, at, replyToken = null }) {
   let convo = (
     await query("SELECT id, display_name FROM chat_conversations WHERE account_id = $1 AND external_user_id = $2", [account.id, userId])
   ).rows[0];
@@ -143,10 +145,10 @@ async function recordMessage({ account, userId, getProfile, direction, type, tex
   }
 
   const inserted = await query(
-    `INSERT INTO chat_messages (conversation_id, direction, message_type, text, external_message_id, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO chat_messages (conversation_id, direction, message_type, text, meta, external_message_id, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT DO NOTHING RETURNING id`,
-    [convo.id, direction, type, text, externalId, at]
+    [convo.id, direction, type, text, msgMeta ? JSON.stringify(msgMeta) : null, externalId, at]
   );
   if (!inserted.rows[0]) return; // ส่งซ้ำ หรือเป็นข้อความที่แอปเราส่งเองและบันทึกไว้แล้ว
 
@@ -418,13 +420,53 @@ router.get("/conversations/:id/messages", requireAuth, requirePermission("chat.v
   if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
 
   const messages = await query(
-    `SELECT m.id, m.direction, m.message_type, m.text, m.created_at, s.name AS staff_name
+    `SELECT m.id, m.direction, m.message_type, m.text, m.meta, m.created_at, s.name AS staff_name
      FROM chat_messages m LEFT JOIN staff s ON s.id = m.sent_by_staff_id
      WHERE m.conversation_id = $1 ORDER BY m.created_at ASC, m.id ASC LIMIT 500`,
     [convo.id]
   );
   await query("UPDATE chat_conversations SET unread_count = 0 WHERE id = $1 AND unread_count > 0", [convo.id]);
   res.json({ ok: true, conversation: convo, messages: messages.rows });
+});
+
+// รูป / วิดีโอ / เสียง / ไฟล์ ที่ลูกค้าส่งมา — ดึงจาก LINE หรือ Meta ผ่านเซิร์ฟเวอร์เรา (ต้องล็อกอินและมีสิทธิ์เห็นแชทนั้น)
+// หน้าเว็บใช้ <img src="/api/chat/messages/:id/content"> ได้เลย เพราะ cookie ล็อกอินส่งไปด้วยอัตโนมัติ
+const MEDIA_TYPES = new Set(["image", "video", "audio", "file"]);
+router.get("/messages/:id/content", requireAuth, requirePermission("chat.view"), async (req, res) => {
+  const msg = (
+    await query(
+      `SELECT m.message_type, m.external_message_id, m.meta, c.assigned_staff_id, c.account_id
+       FROM chat_messages m JOIN chat_conversations c ON c.id = m.conversation_id WHERE m.id = $1`,
+      [req.params.id]
+    )
+  ).rows[0];
+  if (!msg || !MEDIA_TYPES.has(msg.message_type)) return res.status(404).json({ ok: false, error: "media not found" });
+  if (!canSeeConvo(req.staff, msg)) return res.status(403).json(NOT_YOURS);
+
+  const account = msg.account_id ? await getAccount(msg.account_id) : null;
+  let upstream;
+  try {
+    if (msg.meta?.externalUrl || msg.meta?.url) {
+      upstream = await fetch(msg.meta.externalUrl || msg.meta.url);
+      if (!upstream.ok) throw Object.assign(new Error("upstream"), { status: upstream.status });
+    } else if (account?.channel === "line" && msg.external_message_id) {
+      upstream = await line.getContent(account.line_access_token, msg.external_message_id);
+    } else {
+      return res.status(404).json({ ok: false, error: "media not found" });
+    }
+  } catch (err) {
+    // LINE เก็บไฟล์ไว้ให้ระยะหนึ่ง; ลิงก์ของ Meta ก็หมดอายุได้
+    const gone = err.status === 404 || err.status === 410 || err.status === 403;
+    return res.status(gone ? 410 : 502).json({ ok: false, error: gone ? "ไฟล์หมดอายุแล้ว" : "ดึงไฟล์ไม่สำเร็จ" });
+  }
+
+  const buf = Buffer.from(await upstream.arrayBuffer());
+  res.set("Content-Type", upstream.headers.get("content-type") || "application/octet-stream");
+  res.set("Cache-Control", "private, max-age=604800"); // เบราว์เซอร์เก็บไว้ 7 วัน ไม่ต้องดึงซ้ำ
+  if (msg.message_type === "file" && msg.meta?.fileName) {
+    res.set("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(msg.meta.fileName)}`);
+  }
+  res.send(buf);
 });
 
 // ส่งข้อความตอบลูกค้า — ส่งออกทางบัญชีเดียวกับที่ลูกค้าทักเข้ามา

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import { CHANNEL_LABELS, formatBaht, metaReplyHoursLeft, ticketNumber, type ChatMessage, type Conversation } from "../../lib/chat";
 import TicketDetailsSheet from "./TicketDetailsSheet";
+import MessageContent, { isBareMedia } from "./MessageContent";
 import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
 import { useAuth } from "../../context/AuthContext";
@@ -277,17 +278,22 @@ function MessageBubble({ m }: { m: ChatMessage }) {
   }
 
   const out = m.direction === "out";
+  const bare = isBareMedia(m);
   return (
     <div className={`mb-1.5 flex items-end gap-1.5 ${out ? "justify-end" : "justify-start"}`}>
       {out && <span className="mb-0.5 text-[10px] text-gray-400">{time}</span>}
       <div className="max-w-[78%]">
-        <div
-          className={`whitespace-pre-wrap break-words px-3.5 py-2 text-[15px] leading-relaxed ${
-            out ? "rounded-2xl rounded-br-md bg-brand-navy text-white" : "rounded-2xl rounded-bl-md bg-white text-gray-900 shadow-sm ring-1 ring-gray-100"
-          }`}
-        >
-          {m.text}
-        </div>
+        {bare ? (
+          <MessageContent m={m} out={out} />
+        ) : (
+          <div
+            className={`whitespace-pre-wrap break-words px-3.5 py-2 text-[15px] leading-relaxed ${
+              out ? "rounded-2xl rounded-br-md bg-brand-navy text-white" : "rounded-2xl rounded-bl-md bg-white text-gray-900 shadow-sm ring-1 ring-gray-100"
+            }`}
+          >
+            <MessageContent m={m} out={out} />
+          </div>
+        )}
         {out && m.staff_name && <div className="mt-0.5 text-right text-[10px] text-gray-400">{m.staff_name}</div>}
       </div>
       {!out && <span className="mb-0.5 text-[10px] text-gray-400">{time}</span>}
