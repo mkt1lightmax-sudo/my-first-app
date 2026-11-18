@@ -8,6 +8,7 @@ import { staffRoleLabel } from "../lib/staff";
 import { formatNotificationTime, type Notification } from "../lib/notifications";
 import { can, isOwner } from "../lib/permissions";
 import { useChatUnread } from "../lib/useChatUnread";
+import { useNewVersion } from "../lib/useNewVersion";
 import NotificationSettings from "./NotificationSettings";
 
 const allTabs = [
@@ -22,6 +23,7 @@ export default function Layout() {
   const { staff, logout } = useAuth();
   const tabs = allTabs.filter((t) => t.to !== "/chat" || can(staff, "chat.view"));
   const chatUnread = useChatUnread(can(staff, "chat.view"));
+  const newVersion = useNewVersion();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -61,6 +63,15 @@ export default function Layout() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-gray-50">
+      {newVersion && (
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center justify-center gap-2 bg-brand-navy px-4 py-2.5 text-sm font-medium text-white"
+        >
+          <span aria-hidden>✨</span>
+          มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต
+        </button>
+      )}
       <header className="relative flex items-center justify-between border-b bg-white px-4 py-3">
         <Logo />
         <div className="flex items-center gap-3">
