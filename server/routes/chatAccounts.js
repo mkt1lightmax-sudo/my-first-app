@@ -61,10 +61,14 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
 
     let page;
     try {
-      page = await meta.getPageInfo(token);
-    } catch {
-      return res.status(400).json({ ok: false, error: "Page access token ไม่ถูกต้อง หรือไม่ใช่ token ของเพจ" });
+      page = await meta.getPageInfo(token, { withInstagram: channel === "instagram" });
+    } catch (err) {
+      // แสดงเหตุผลจาก Meta ด้วย (ไม่มี token อยู่ในข้อความ) จะได้รู้ว่าติดอะไร
+      const reason = err.metaError?.message ? ` (Meta: ${String(err.metaError.message).slice(0, 200)})` : "";
+      console.error("meta page token check failed:", err.metaError?.code, err.metaError?.message);
+      return res.status(400).json({ ok: false, error: `Page access token ใช้ไม่ได้${reason}` });
     }
+    if (!page?.id) return res.status(400).json({ ok: false, error: "token นี้ไม่ใช่ token ของเพจ" });
     const ig = page.instagram_business_account;
     if (channel === "instagram" && !ig?.id) {
       return res.status(400).json({ ok: false, error: `เพจ "${page.name}" ยังไม่ได้ผูกกับบัญชี Instagram ธุรกิจ` });
@@ -76,10 +80,11 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
       await fetch(
         `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v24.0"}/${page.id}/subscribed_apps?subscribed_fields=messages,message_echoes&access_token=${encodeURIComponent(token)}`,
         { method: "POST" }
-      ).then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
+      ).then(async (r) => {
+        if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => "")).slice(0, 200)}`);
       });
-    } catch {
+    } catch (err) {
+      console.error("meta subscribed_apps failed:", err.message);
       warning = "เพิ่มบัญชีแล้ว แต่สมัครรับข้อความของเพจอัตโนมัติไม่สำเร็จ — อาจต้องตั้งค่า Webhook ในหน้า Meta App เอง";
     }
 

@@ -71,9 +71,16 @@ async function sendImage(token, userId, url) {
   return data.message_id || null;
 }
 
-// ใช้ตอนแอดมินเพิ่มบัญชี — เช็กว่า token ใช้ได้ และหาไอดีเพจ + IG ที่ผูกอยู่
-function getPageInfo(token) {
-  return graphFetch(token, "/me?fields=id,name,instagram_business_account{id,username}");
+// ใช้ตอนแอดมินเพิ่มบัญชี — เช็กว่า token ใช้ได้ และหาไอดีเพจ (+ IG ที่ผูกอยู่ เฉพาะตอนเพิ่ม IG)
+// ขอข้อมูล IG แยกต่างหาก เพราะ token ของเพจที่ได้จากหน้า Messenger มักไม่มีสิทธิ์ IG
+// ถ้าขอรวมกัน Meta จะปฏิเสธทั้งคำขอ ทั้งที่ token ใช้กับ Messenger ได้ปกติ
+async function getPageInfo(token, { withInstagram = false } = {}) {
+  const page = await graphFetch(token, "/me?fields=id,name");
+  if (withInstagram) {
+    const ig = await graphFetch(token, `/${page.id}?fields=instagram_business_account{id,username}`);
+    page.instagram_business_account = ig.instagram_business_account || null;
+  }
+  return page;
 }
 
 const ATTACHMENT_LABELS = {
