@@ -17,6 +17,31 @@ const EDITABLE_FIELDS = [
   "notes",
 ];
 
+const TYPE_LABELS = {
+  site_survey: "สำรวจหน้างาน",
+  presentation: "นำเสนองาน",
+  installation: "ติดตั้ง",
+};
+
+// สร้างแจ้งเตือนให้พนักงานที่ถูกมอบหมายงาน (ไม่แจ้งเตือนตัวเองถ้ามอบหมายให้ตัวเอง)
+async function notifyAssignment(appointment, actingStaffId) {
+  if (!appointment.assigned_staff_id || appointment.assigned_staff_id === actingStaffId) return;
+
+  const typeLabel = TYPE_LABELS[appointment.type] ?? appointment.type;
+  const date = new Date(appointment.scheduled_start).toLocaleString("th-TH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const message = `คุณได้รับมอบหมายงาน${typeLabel}: ${appointment.customer_name} วันที่ ${date}`;
+
+  await query("INSERT INTO notifications (staff_id, type, message, appointment_id) VALUES ($1, $2, $3, $4)", [
+    appointment.assigned_staff_id,
+    "appointment_assigned",
+    message,
+    appointment.id,
+  ]);
+}
+
 router.post("/", requireAuth, async (req, res) => {
   const { type, customer_name, scheduled_start, scheduled_end } = req.body;
   if (!type || !customer_name || !scheduled_start || !scheduled_end) {
@@ -43,6 +68,8 @@ router.post("/", requireAuth, async (req, res) => {
       req.staff.id,
     ]
   );
+
+  await notifyAssignment(result.rows[0], req.staff.id);
 
   res.status(201).json({ ok: true, appointment: result.rows[0] });
 });
@@ -99,7 +126,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 });
 
 router.patch("/:id", requireAuth, async (req, res) => {
-  const existing = await query("SELECT id FROM appointments WHERE id = $1", [req.params.id]);
+  const existing = await query("SELECT * FROM appointments WHERE id = $1", [req.params.id]);
   if (!existing.rows[0]) {
     return res.status(404).json({ ok: false, error: "appointment not found" });
   }
@@ -124,7 +151,12 @@ router.patch("/:id", requireAuth, async (req, res) => {
     params
   );
 
-  res.json({ ok: true, appointment: result.rows[0] });
+  const updated = result.rows[0];
+  if (updated.assigned_staff_id !== existing.rows[0].assigned_staff_id) {
+    await notifyAssignment(updated, req.staff.id);
+  }
+
+  res.json({ ok: true, appointment: updated });
 });
 
 router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {

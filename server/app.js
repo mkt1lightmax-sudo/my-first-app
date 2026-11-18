@@ -7,11 +7,14 @@ const staffRouter = require("./routes/staff");
 const surveysRouter = require("./routes/surveys");
 const calculateRouter = require("./routes/calculate");
 const appointmentsRouter = require("./routes/appointments");
+const notificationsRouter = require("./routes/notifications");
+const chatRouter = require("./routes/chat");
 
 const app = express();
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+// เก็บ body ดิบไว้ด้วย — LINE webhook ต้องใช้ตรวจลายเซ็น
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(cookieParser());
 
 app.get("/api/health", (req, res) => {
@@ -34,6 +37,8 @@ app.use("/api/staff", staffRouter);
 app.use("/api/surveys", surveysRouter);
 app.use("/api/calculate", calculateRouter);
 app.use("/api/appointments", appointmentsRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/chat", chatRouter);
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, error: "not found" });

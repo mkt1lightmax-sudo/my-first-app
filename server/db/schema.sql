@@ -124,3 +124,84 @@ CREATE TABLE IF NOT EXISTS appointments (
 CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_start ON appointments(scheduled_start);
 CREATE INDEX IF NOT EXISTS idx_appointments_assigned_staff  ON appointments(assigned_staff_id);
 CREATE INDEX IF NOT EXISTS idx_surveys_created_by           ON surveys(created_by);
+
+-- ระบบแจ้งเตือนในแอป — ใช้ตอนมอบหมายนัดหมายให้พนักงาน
+CREATE TABLE IF NOT EXISTS notifications (
+  id             SERIAL PRIMARY KEY,
+  staff_id       INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  type           TEXT NOT NULL DEFAULT 'appointment_assigned',
+  message        TEXT NOT NULL,
+  appointment_id INTEGER REFERENCES appointments(id) ON DELETE CASCADE,
+  is_read        BOOLEAN NOT NULL DEFAULT false,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_staff_unread ON notifications(staff_id, is_read);
+
+-- ระบบรวมแชท (LINE OA ก่อน — ในอนาคตเพิ่ม Messenger / IG ได้ด้วย channel)
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id                   SERIAL PRIMARY KEY,
+  channel              TEXT NOT NULL,              -- 'line' | 'messenger' | 'instagram' ...
+  external_user_id     TEXT NOT NULL,              -- ไอดีลูกค้าในแพลตฟอร์มนั้น
+  display_name         TEXT,
+  picture_url          TEXT,
+  last_message_preview TEXT,
+  last_message_at      TIMESTAMPTZ,
+  unread_count         INTEGER NOT NULL DEFAULT 0,
+  reply_token          TEXT,                       -- LINE: ตอบฟรีได้ถ้าใช้ภายใน ~1 นาที
+  reply_token_at       TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (channel, external_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_last ON chat_conversations(last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id                  SERIAL PRIMARY KEY,
+  conversation_id     INTEGER NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  direction           TEXT NOT NULL,               -- 'in' = ลูกค้าส่งมา, 'out' = เราตอบ
+  message_type        TEXT NOT NULL DEFAULT 'text',
+  text                TEXT,
+  external_message_id TEXT,
+  sent_by_staff_id    INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_external ON chat_messages(external_message_id) WHERE external_message_id IS NOT NULL;
+
+-- แชท: มอบหมายผู้ดูแลลูกค้า + ป้ายแบ่งกลุ่มลูกค้า
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS assigned_staff_id INTEGER REFERENCES staff(id) ON DELETE SET NULL;
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_assigned ON chat_conversations(assigned_staff_id);
+
+-- แจ้งเตือนเมื่อถูกมอบหมายแชท
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS chat_conversation_id INTEGER REFERENCES chat_conversations(id) ON DELETE CASCADE;
+
+-- เวลาที่ลูกค้าทักมาล่าสุด — ใช้เช็กกฎ 24 ชม. ของ Messenger / Instagram
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS last_inbound_at TIMESTAMPTZ;
+UPDATE chat_conversations c SET last_inbound_at = (
+  SELECT MAX(created_at) FROM chat_messages m WHERE m.conversation_id = c.id AND m.direction = 'in'
+) WHERE last_inbound_at IS NULL;
+
+-- หลายบัญชีต่อช่องทาง: LINE OA หลายบัญชี, เพจ Facebook หลายเพจ, IG หลายบัญชี (ไม่จำกัดจำนวน)
+CREATE TABLE IF NOT EXISTS chat_accounts (
+  id                  SERIAL PRIMARY KEY,
+  channel             TEXT NOT NULL CHECK (channel IN ('line', 'messenger', 'instagram')),
+  name                TEXT NOT NULL,             -- ชื่อที่ทีมเห็น เช่น "LINE หลัก", "เพจ LIGHTMAX"
+  line_channel_secret TEXT,                      -- LINE เท่านั้น
+  line_access_token   TEXT,                      -- LINE เท่านั้น
+  meta_page_id        TEXT,                      -- Messenger: ไอดีเพจ
+  meta_ig_id          TEXT,                      -- Instagram: ไอดีบัญชี IG ธุรกิจ
+  meta_page_token     TEXT,                      -- Messenger/IG: Page access token ของเพจ (IG ใช้ของเพจที่ผูกอยู่)
+  is_active           BOOLEAN NOT NULL DEFAULT true,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_accounts_page ON chat_accounts(meta_page_id) WHERE channel = 'messenger';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_accounts_ig   ON chat_accounts(meta_ig_id)   WHERE channel = 'instagram';
+
+-- แชทแต่ละห้องผูกกับบัญชีที่ลูกค้าทักเข้ามา (ลูกค้าคนเดียวทัก 2 OA = 2 ห้องแชท)
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES chat_accounts(id) ON DELETE SET NULL;
+ALTER TABLE chat_conversations DROP CONSTRAINT IF EXISTS chat_conversations_channel_external_user_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_conversations_account_user ON chat_conversations(account_id, external_user_id);

@@ -1,33 +1,124 @@
-import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "../context/AuthContext";
-import { HomeIcon, UsersIcon, BriefcaseIcon, CalendarIcon, BellIcon, UserIcon, UserPlusIcon, LogoutIcon } from "./icons";
+import { api } from "../lib/api";
+import { HomeIcon, UsersIcon, BriefcaseIcon, CalendarIcon, BellIcon, ChatIcon, UserIcon, UserPlusIcon, LogoutIcon } from "./icons";
 import { roleLabel } from "../lib/staff";
+import { formatNotificationTime, type Notification } from "../lib/notifications";
 
 const tabs = [
   { to: "/", label: "หน้าหลัก", icon: HomeIcon, end: true },
   { to: "/surveys", label: "ลูกค้า", icon: UsersIcon, end: false },
   { to: "/appointments", label: "งาน", icon: BriefcaseIcon, end: false },
+  { to: "/chat", label: "แชท", icon: ChatIcon, end: false },
   { to: "/calendar", label: "ปฏิทิน", icon: CalendarIcon, end: false },
 ];
 
 export default function Layout() {
   const { staff, logout } = useAuth();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  function loadNotifications() {
+    api
+      .get<{ ok: true; notifications: Notification[]; unreadCount: number }>("/notifications")
+      .then((data) => {
+        setNotifications(data.notifications);
+        setUnreadCount(data.unreadCount);
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function handleNotificationClick(n: Notification) {
+    if (!n.is_read) {
+      await api.patch(`/notifications/${n.id}/read`);
+      loadNotifications();
+    }
+    setNotifOpen(false);
+    if (n.appointment_id) navigate(`/appointments/${n.appointment_id}/edit`);
+    else if (n.chat_conversation_id) navigate(`/chat/${n.chat_conversation_id}`);
+  }
+
+  async function handleMarkAllRead() {
+    await api.patch("/notifications/read-all");
+    loadNotifications();
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-gray-50">
       <header className="relative flex items-center justify-between border-b bg-white px-4 py-3">
         <Logo />
         <div className="flex items-center gap-3">
-          <button className="text-brand-navy" aria-label="การแจ้งเตือน">
+          <button
+            onClick={() => {
+              setNotifOpen((v) => !v);
+              setMenuOpen(false);
+            }}
+            className="relative text-brand-navy"
+            aria-label="การแจ้งเตือน"
+          >
             <BellIcon className="h-6 w-6" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-red text-[9px] font-bold text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
-          <button onClick={() => setMenuOpen((v) => !v)} className="text-brand-navy" aria-label="เมนูบัญชี">
+          <button
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setNotifOpen(false);
+            }}
+            className="text-brand-navy"
+            aria-label="เมนูบัญชี"
+          >
             <UserIcon className="h-6 w-6" />
           </button>
         </div>
+
+        {notifOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
+            <div className="absolute right-4 top-14 z-20 max-h-96 w-72 overflow-y-auto rounded-xl border bg-white p-2 shadow-lg">
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="text-sm font-medium text-gray-900">การแจ้งเตือน</span>
+                {unreadCount > 0 && (
+                  <button onClick={handleMarkAllRead} className="text-xs text-brand-navy hover:underline">
+                    อ่านทั้งหมด
+                  </button>
+                )}
+              </div>
+              {notifications.length === 0 && <p className="px-2 py-3 text-sm text-gray-400">ยังไม่มีการแจ้งเตือน</p>}
+              {notifications.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => handleNotificationClick(n)}
+                  className={`block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-gray-50 ${
+                    n.is_read ? "text-gray-500" : "text-gray-900"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.is_read && <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-red" />}
+                    <div className={n.is_read ? "ml-3.5" : ""}>
+                      <div>{n.message}</div>
+                      <div className="mt-0.5 text-xs text-gray-400">{formatNotificationTime(n.created_at)}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {menuOpen && (
           <>
@@ -45,6 +136,16 @@ export default function Layout() {
                 >
                   <UserPlusIcon className="h-4 w-4" />
                   จัดการพนักงาน
+                </Link>
+              )}
+              {staff?.role === "admin" && (
+                <Link
+                  to="/chat/accounts"
+                  onClick={() => setMenuOpen(false)}
+                  className="mt-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <ChatIcon className="h-4 w-4" />
+                  บัญชีแชท (LINE / เพจ / IG)
                 </Link>
               )}
 
