@@ -297,3 +297,6 @@ ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_address TEXT;
 ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_note TEXT;
 ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_info_updated_at TIMESTAMPTZ;
 ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_info_updated_by INTEGER REFERENCES staff(id) ON DELETE SET NULL;
+
+-- LINE ID ส่วนตัวของลูกค้า (ถ้าลูกค้าให้มา) — ใช้ปุ่ม "เปิดใน LINE" ไปหน้าโปรไฟล์ลูกค้า
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_line_id TEXT;

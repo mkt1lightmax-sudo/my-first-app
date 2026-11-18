@@ -13,7 +13,9 @@ export default function CustomerInfoCard({
   onChange: (c: Conversation) => void;
 }) {
   const c = conversation;
-  const hasInfo = Boolean(c.customer_phone || c.customer_address || c.customer_note);
+  const hasInfo = Boolean(c.customer_phone || c.customer_address || c.customer_note || c.customer_line_id);
+  // เปิดหน้าโปรไฟล์ LINE ของลูกค้า (เป็นเพื่อนแล้ว = กดแชท/โทรได้, ยังไม่เป็น = กดเพิ่มเพื่อนได้)
+  const lineUrl = c.customer_line_id ? `https://line.me/ti/p/~${encodeURIComponent(c.customer_line_id)}` : null;
   const [editing, setEditing] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -28,7 +30,7 @@ export default function CustomerInfoCard({
         onClick={() => setEditing(true)}
         className="flex w-full items-center gap-2 border-b border-gray-100 bg-white px-4 py-2.5 text-left text-xs text-brand-navy active:bg-gray-50"
       >
-        <span aria-hidden>📇</span> + เพิ่มเบอร์โทร / ที่อยู่ / โน้ตลูกค้า
+        <span aria-hidden>📇</span> + เพิ่มเบอร์โทร / LINE ID / ที่อยู่ / โน้ตลูกค้า
       </button>
     );
   }
@@ -39,10 +41,22 @@ export default function CustomerInfoCard({
         <button onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span aria-hidden>📇</span>
           <span className="min-w-0 flex-1 truncate text-xs text-gray-700">
-            {[c.customer_phone, c.customer_address, c.customer_note && "มีโน้ต"].filter(Boolean).join(" · ")}
+            {[c.customer_phone, c.customer_line_id && `LINE: ${c.customer_line_id}`, c.customer_address, c.customer_note && "มีโน้ต"]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
           <span className="text-xs text-gray-400">{open ? "▲" : "▼"}</span>
         </button>
+        {lineUrl && (
+          <a
+            href={lineUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex-shrink-0 rounded-full bg-[#06C755] px-2.5 py-1 text-xs font-semibold text-white"
+          >
+            LINE
+          </a>
+        )}
         {c.customer_phone && (
           <a
             href={`tel:${c.customer_phone.replace(/[^\d+]/g, "")}`}
@@ -60,6 +74,15 @@ export default function CustomerInfoCard({
               <a href={`tel:${c.customer_phone.replace(/[^\d+]/g, "")}`} className="text-brand-navy underline-offset-2 hover:underline">
                 {c.customer_phone}
               </a>
+            </InfoRow>
+          )}
+          {c.customer_line_id && lineUrl && (
+            <InfoRow label="LINE ID (ส่วนตัวของลูกค้า)">
+              <span>{c.customer_line_id}</span>
+              <a href={lineUrl} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-brand-navy underline-offset-2 hover:underline">
+                เปิดใน LINE ›
+              </a>
+              <span className="mt-1 block text-[11px] text-gray-400">คุยผ่าน LINE ส่วนตัว ข้อความจะไม่ขึ้นในแอป — จดสรุปไว้ในโน้ตด้วย</span>
             </InfoRow>
           )}
           {c.customer_address && (
@@ -119,6 +142,7 @@ function EditForm({
   const [phone, setPhone] = useState(conversation.customer_phone ?? "");
   const [address, setAddress] = useState(conversation.customer_address ?? "");
   const [note, setNote] = useState(conversation.customer_note ?? "");
+  const [lineId, setLineId] = useState(conversation.customer_line_id ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,6 +155,7 @@ function EditForm({
         customer_phone: phone,
         customer_address: address,
         customer_note: note,
+        customer_line_id: lineId,
       });
       onSaved(d.conversation);
     } catch (err) {
@@ -152,6 +177,15 @@ function EditForm({
         inputMode="tel"
         maxLength={30}
         placeholder="เบอร์โทร เช่น 081-234-5678"
+        className={input}
+      />
+      <input
+        value={lineId}
+        onChange={(e) => setLineId(e.target.value)}
+        maxLength={21}
+        autoCapitalize="none"
+        autoCorrect="off"
+        placeholder="LINE ID ส่วนตัวของลูกค้า (ถ้าลูกค้าให้มา)"
         className={input}
       />
       <textarea

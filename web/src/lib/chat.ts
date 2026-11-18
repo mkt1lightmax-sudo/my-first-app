@@ -27,6 +27,7 @@ export type Conversation = {
   customer_phone: string | null;
   customer_address: string | null;
   customer_note: string | null;
+  customer_line_id: string | null;
   customer_info_updated_at: string | null;
   customer_info_updated_by_name: string | null;
 };

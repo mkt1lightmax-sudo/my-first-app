@@ -220,7 +220,7 @@ const CONVO_COLUMNS = `c.id, c.channel, c.account_id, a.name AS account_name, c.
   c.status, c.closed_at, cs.name AS closed_by_name, c.is_spam, (f.staff_id IS NOT NULL) AS followed,
   c.assigned_staff_id, s.name AS assigned_staff_name, c.tags,
   c.ticket_seq, d.amount::float AS deal_amount, d.outcome AS deal_outcome, d.note AS deal_note,
-  c.customer_phone, c.customer_address, c.customer_note, c.customer_info_updated_at,
+  c.customer_phone, c.customer_address, c.customer_note, c.customer_line_id, c.customer_info_updated_at,
   (SELECT name FROM staff WHERE id = c.customer_info_updated_by) AS customer_info_updated_by_name`;
 
 function selectConvo(id, staffId) {
@@ -256,7 +256,7 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
   if (q.q && String(q.q).trim()) {
     // ค้นจากชื่อลูกค้า เบอร์โทร ที่อยู่ โน้ต หรือข้อความในแชท
     add(
-      `(c.display_name ILIKE ? OR c.customer_phone ILIKE ? OR c.customer_address ILIKE ? OR c.customer_note ILIKE ?
+      `(c.display_name ILIKE ? OR c.customer_phone ILIKE ? OR c.customer_address ILIKE ? OR c.customer_note ILIKE ? OR c.customer_line_id ILIKE ?
         OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.conversation_id = c.id AND m.text ILIKE ?))`,
       `%${String(q.q).trim().replace(/[%_\\]/g, "\\$&")}%`
     );
@@ -446,20 +446,28 @@ router.patch("/conversations/:id", requireAuth, requirePermission("chat.reply"),
     tags = [...new Set(req.body.tags.map((t) => String(t).trim().slice(0, 30)).filter(Boolean))].slice(0, 10);
   }
 
-  await query("UPDATE chat_conversations SET assigned_staff_id = $2, tags = $3 WHERE id = $1", [convo.id, assigned, tags]);
-
-  // ข้อมูลลูกค้า (เบอร์โทร / ที่อยู่ / โน้ต) — ส่งมาเฉพาะช่องที่ต้องการแก้, ค่าว่าง = ลบ
-  const INFO_FIELDS = { customer_phone: 30, customer_address: 500, customer_note: 2000 };
+  // ข้อมูลลูกค้า (เบอร์โทร / ที่อยู่ / โน้ต / LINE ID) — ส่งมาเฉพาะช่องที่ต้องการแก้, ค่าว่าง = ลบ
+  // ตรวจทุกช่องก่อนบันทึกอะไรเลย (ไม่ให้บันทึกครึ่งๆ กลางๆ)
+  const INFO_FIELDS = { customer_phone: 30, customer_address: 500, customer_note: 2000, customer_line_id: 20 };
   const infoSets = [];
   const infoParams = [convo.id];
   for (const [field, max] of Object.entries(INFO_FIELDS)) {
     if (req.body && field in req.body) {
-      const v = req.body[field] === null ? "" : String(req.body[field]).trim();
+      let v = req.body[field] === null ? "" : String(req.body[field]).trim();
+      if (field === "customer_line_id") {
+        v = v.replace(/^[@~]/, ""); // คนมักพิมพ์ @ นำหน้ามาด้วย
+        if (v && !/^[A-Za-z0-9._-]+$/.test(v)) {
+          return res.status(400).json({ ok: false, error: "LINE ID ใช้ได้เฉพาะ a-z, 0-9, จุด ขีด และขีดล่าง" });
+        }
+        v = v.toLowerCase();
+      }
       if (v.length > max) return res.status(400).json({ ok: false, error: `ข้อมูลยาวเกิน ${max} ตัวอักษร` });
       infoParams.push(v || null);
       infoSets.push(`${field} = $${infoParams.length}`);
     }
   }
+
+  await query("UPDATE chat_conversations SET assigned_staff_id = $2, tags = $3 WHERE id = $1", [convo.id, assigned, tags]);
   if (infoSets.length) {
     infoParams.push(req.staff.id);
     await query(
