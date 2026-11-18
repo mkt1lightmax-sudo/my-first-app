@@ -17,13 +17,22 @@ async function requireAuth(req, res, next) {
     return res.status(401).json({ ok: false, error: "invalid or expired session" });
   }
 
-  const result = await query("SELECT id, name, email, role, is_owner FROM staff WHERE id = $1", [payload.id]);
+  const result = await query(
+    "SELECT id, name, email, role, is_owner, password_changed_at FROM staff WHERE id = $1",
+    [payload.id]
+  );
   const staff = result.rows[0];
   if (!staff) {
     res.clearCookie(COOKIE_NAME);
     return res.status(401).json({ ok: false, error: "บัญชีนี้ถูกลบออกจากระบบแล้ว" });
   }
+  // ล็อกอินก่อนเปลี่ยนรหัสผ่าน = หมดอายุ (เทียบเป็นวินาที เพราะ iat ของ JWT เป็นวินาที)
+  if (staff.password_changed_at && Math.floor(new Date(staff.password_changed_at).getTime() / 1000) > (payload.iat || 0)) {
+    res.clearCookie(COOKIE_NAME);
+    return res.status(401).json({ ok: false, error: "รหัสผ่านถูกเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่" });
+  }
 
+  delete staff.password_changed_at;
   req.staff = staff;
   next();
 }

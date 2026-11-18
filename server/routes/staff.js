@@ -2,9 +2,32 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const { query } = require("../db/pool");
 const { requireAuth } = require("../middleware/auth");
-const { requirePermission } = require("../lib/permissions");
+const { requirePermission, requireOwner } = require("../lib/permissions");
+const { signToken, COOKIE_NAME } = require("../lib/jwt");
+const { cookieOptions } = require("./auth");
 
 const router = express.Router();
+
+// เปลี่ยนรหัสผ่าน — เจ้าของระบบคนเดียวเท่านั้น (เปลี่ยนให้พนักงานคนไหนก็ได้ รวมถึงตัวเอง)
+// เครื่องที่ล็อกอินด้วยรหัสเดิมจะถูกเตะออกทุกเครื่อง; ถ้าเปลี่ยนของตัวเอง เครื่องนี้ยังอยู่ในระบบต่อ
+router.put("/:id/password", requireAuth, requireOwner, async (req, res) => {
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (password.length < 8) return res.status(400).json({ ok: false, error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" });
+  if (password.length > 128) return res.status(400).json({ ok: false, error: "รหัสผ่านยาวเกินไป" });
+
+  const target = (await query("SELECT id, name, email, role, is_owner FROM staff WHERE id = $1", [req.params.id])).rows[0];
+  if (!target) return res.status(404).json({ ok: false, error: "staff not found" });
+
+  const hash = await bcrypt.hash(password, 10);
+  // ใช้เวลาของเซิร์ฟเวอร์นี้ (ไม่ใช่ now() ของฐานข้อมูล) ให้ตรงกับเวลาใน token ที่ออกให้ด้านล่าง
+  await query("UPDATE staff SET password_hash = $2, password_changed_at = $3 WHERE id = $1", [target.id, hash, new Date()]);
+
+  if (target.id === req.staff.id) {
+    const token = signToken({ id: target.id, name: target.name, email: target.email, role: target.role });
+    res.cookie(COOKIE_NAME, token, cookieOptions);
+  }
+  res.json({ ok: true, name: target.name });
+});
 
 const ROLES = ["admin", "sales", "surveyor", "installer", "viewer"];
 

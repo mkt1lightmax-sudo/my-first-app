@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
@@ -11,6 +11,8 @@ export default function StaffListPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [changingId, setChangingId] = useState<number | null>(null);
+  const [passwordFor, setPasswordFor] = useState<StaffMember | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -69,6 +71,7 @@ export default function StaffListPage() {
       </div>
 
       {error && <p className="text-sm text-brand-red">{error}</p>}
+      {notice && <p className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-800">{notice}</p>}
 
       <div className="space-y-2">
         {staffList?.map((s) => (
@@ -100,18 +103,127 @@ export default function StaffListPage() {
                 </select>
               )}
             </div>
-            {canManage(s) && (
-              <button
-                onClick={() => handleDelete(s.id)}
-                disabled={deletingId === s.id}
-                className="text-sm text-brand-red hover:underline disabled:opacity-50"
-              >
-                {deletingId === s.id ? "กำลังลบ..." : "ลบ"}
-              </button>
-            )}
+            <div className="flex flex-shrink-0 flex-col items-end gap-2">
+              {isOwner(currentStaff) && (
+                <button onClick={() => setPasswordFor(s)} className="text-sm text-brand-navy hover:underline">
+                  เปลี่ยนรหัส
+                </button>
+              )}
+              {canManage(s) && (
+                <button
+                  onClick={() => handleDelete(s.id)}
+                  disabled={deletingId === s.id}
+                  className="text-sm text-brand-red hover:underline disabled:opacity-50"
+                >
+                  {deletingId === s.id ? "กำลังลบ..." : "ลบ"}
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
+
+      {passwordFor && (
+        <ChangePasswordSheet
+          staff={passwordFor}
+          isSelf={passwordFor.id === currentStaff?.id}
+          onDone={(msg) => {
+            setPasswordFor(null);
+            setNotice(msg);
+          }}
+          onClose={() => setPasswordFor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ตั้งรหัสผ่านใหม่ (เจ้าของเท่านั้น)
+function ChangePasswordSheet({
+  staff,
+  isSelf,
+  onDone,
+  onClose,
+}: {
+  staff: StaffMember;
+  isSelf: boolean;
+  onDone: (msg: string) => void;
+  onClose: () => void;
+}) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (pw.length < 8) return setError("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+    if (pw !== pw2) return setError("รหัสผ่านทั้งสองช่องไม่ตรงกัน");
+    setSaving(true);
+    try {
+      await api.put(`/staff/${staff.id}/password`, { password: pw });
+      onDone(
+        isSelf
+          ? "เปลี่ยนรหัสผ่านของคุณแล้ว — เครื่องอื่นที่ล็อกอินค้างไว้ต้องเข้าสู่ระบบใหม่"
+          : `เปลี่ยนรหัสผ่านของ ${staff.name} แล้ว — ส่งรหัสใหม่ให้เจ้าตัว (ทุกเครื่องที่ล็อกอินอยู่จะต้องเข้าสู่ระบบใหม่)`
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "เปลี่ยนรหัสไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputClass =
+    "w-full rounded-2xl bg-gray-100 px-4 py-3 text-[15px] focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-navy/30";
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <form onSubmit={save} className="relative w-full max-w-md space-y-4 rounded-t-3xl bg-white px-5 pb-6 pt-3 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <button type="button" onClick={onClose} className="text-sm text-gray-500">
+            ปิด
+          </button>
+          <div className="flex flex-col items-center">
+            <span className="mb-2 h-1 w-10 rounded-full bg-gray-200" />
+            <span className="text-base font-semibold text-gray-900">เปลี่ยนรหัสผ่าน</span>
+          </div>
+          <span className="w-8" />
+        </div>
+        <p className="text-sm text-gray-600">
+          ตั้งรหัสใหม่ให้ <b>{isSelf ? "ตัวคุณเอง" : staff.name}</b> ({staff.email})
+        </p>
+        <input
+          type={show ? "text" : "password"}
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)"
+          autoComplete="new-password"
+          className={inputClass}
+        />
+        <input
+          type={show ? "text" : "password"}
+          value={pw2}
+          onChange={(e) => setPw2(e.target.value)}
+          placeholder="พิมพ์รหัสใหม่อีกครั้ง"
+          autoComplete="new-password"
+          className={inputClass}
+        />
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+          แสดงรหัสผ่าน
+        </label>
+        <p className="text-xs text-gray-400">
+          {isSelf ? "เครื่องนี้ยังอยู่ในระบบต่อ เครื่องอื่นต้องเข้าสู่ระบบใหม่" : "ทุกเครื่องที่คนนี้ล็อกอินอยู่ จะต้องเข้าสู่ระบบใหม่ด้วยรหัสใหม่"}
+        </p>
+        {error && <p className="text-sm text-brand-red">{error}</p>}
+        <button type="submit" disabled={saving} className="w-full rounded-2xl bg-brand-navy py-3.5 text-sm font-semibold text-white disabled:opacity-50">
+          {saving ? "กำลังบันทึก..." : "บันทึกรหัสผ่านใหม่"}
+        </button>
+      </form>
     </div>
   );
 }

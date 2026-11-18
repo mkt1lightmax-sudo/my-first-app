@@ -219,7 +219,9 @@ const CONVO_COLUMNS = `c.id, c.channel, c.account_id, a.name AS account_name, c.
   c.last_message_preview, c.last_message_at, c.last_inbound_at, c.unread_count, c.last_message_direction,
   c.status, c.closed_at, cs.name AS closed_by_name, c.is_spam, (f.staff_id IS NOT NULL) AS followed,
   c.assigned_staff_id, s.name AS assigned_staff_name, c.tags,
-  c.ticket_seq, d.amount::float AS deal_amount, d.outcome AS deal_outcome, d.note AS deal_note`;
+  c.ticket_seq, d.amount::float AS deal_amount, d.outcome AS deal_outcome, d.note AS deal_note,
+  c.customer_phone, c.customer_address, c.customer_note, c.customer_info_updated_at,
+  (SELECT name FROM staff WHERE id = c.customer_info_updated_by) AS customer_info_updated_by_name`;
 
 function selectConvo(id, staffId) {
   return query(`SELECT ${CONVO_COLUMNS} FROM ${convoFrom(staffId)} WHERE c.id = $1`, [id]).then((r) => r.rows[0]);
@@ -252,9 +254,10 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
   if (q.account) add("c.account_id = ?", Number(q.account));
   if (q.tag) add("? = ANY(c.tags)", String(q.tag));
   if (q.q && String(q.q).trim()) {
-    // ค้นจากชื่อลูกค้า หรือข้อความในแชท
+    // ค้นจากชื่อลูกค้า เบอร์โทร ที่อยู่ โน้ต หรือข้อความในแชท
     add(
-      `(c.display_name ILIKE ? OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.conversation_id = c.id AND m.text ILIKE ?))`,
+      `(c.display_name ILIKE ? OR c.customer_phone ILIKE ? OR c.customer_address ILIKE ? OR c.customer_note ILIKE ?
+        OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.conversation_id = c.id AND m.text ILIKE ?))`,
       `%${String(q.q).trim().replace(/[%_\\]/g, "\\$&")}%`
     );
   }
@@ -444,6 +447,27 @@ router.patch("/conversations/:id", requireAuth, requirePermission("chat.reply"),
   }
 
   await query("UPDATE chat_conversations SET assigned_staff_id = $2, tags = $3 WHERE id = $1", [convo.id, assigned, tags]);
+
+  // ข้อมูลลูกค้า (เบอร์โทร / ที่อยู่ / โน้ต) — ส่งมาเฉพาะช่องที่ต้องการแก้, ค่าว่าง = ลบ
+  const INFO_FIELDS = { customer_phone: 30, customer_address: 500, customer_note: 2000 };
+  const infoSets = [];
+  const infoParams = [convo.id];
+  for (const [field, max] of Object.entries(INFO_FIELDS)) {
+    if (req.body && field in req.body) {
+      const v = req.body[field] === null ? "" : String(req.body[field]).trim();
+      if (v.length > max) return res.status(400).json({ ok: false, error: `ข้อมูลยาวเกิน ${max} ตัวอักษร` });
+      infoParams.push(v || null);
+      infoSets.push(`${field} = $${infoParams.length}`);
+    }
+  }
+  if (infoSets.length) {
+    infoParams.push(req.staff.id);
+    await query(
+      `UPDATE chat_conversations SET ${infoSets.join(", ")}, customer_info_updated_at = now(), customer_info_updated_by = $${infoParams.length}
+       WHERE id = $1`,
+      infoParams
+    );
+  }
 
   // แจ้งเตือนคนที่ถูกมอบหมาย (ไม่แจ้งถ้ารับเรื่องเอง)
   if (assigned && assigned !== convo.assigned_staff_id && assigned !== req.staff.id) {

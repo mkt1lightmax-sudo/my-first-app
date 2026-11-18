@@ -24,6 +24,11 @@ export type Conversation = {
   deal_amount: number | null;
   deal_outcome: "won" | "lost" | null;
   deal_note: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
+  customer_note: string | null;
+  customer_info_updated_at: string | null;
+  customer_info_updated_by_name: string | null;
 };
 
 export function ticketNumber(c: Pick<Conversation, "id" | "ticket_seq">) {

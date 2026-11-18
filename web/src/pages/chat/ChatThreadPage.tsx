@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import { CHANNEL_LABELS, formatBaht, metaReplyHoursLeft, ticketNumber, type ChatMessage, type Conversation } from "../../lib/chat";
 import TicketDetailsSheet from "./TicketDetailsSheet";
+import CustomerInfoCard from "./CustomerInfoCard";
 import MessageContent, { isBareMedia } from "./MessageContent";
 import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
@@ -196,6 +197,7 @@ export default function ChatThreadPage() {
       </div>
 
       {conversation && <CustomerPanel conversation={conversation} onChange={setConversation} />}
+      {conversation && <CustomerInfoCard conversation={conversation} canEdit={canReply} onChange={setConversation} />}
       {conversation && (
         <button
           onClick={() => setTicketOpen(true)}

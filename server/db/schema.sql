@@ -287,3 +287,13 @@ CREATE TABLE IF NOT EXISTS chat_media (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_chat_media_conversation ON chat_media(conversation_id);
+
+-- เวลาที่เปลี่ยนรหัสผ่านล่าสุด — ล็อกอินที่เกิดก่อนเวลานี้ถือว่าหมดอายุ (เตะออกทุกเครื่อง)
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+
+-- ข้อมูลลูกค้าในแชท: เบอร์โทร ที่อยู่ และโน้ตของทีม (ลูกค้าไม่เห็น)
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_address TEXT;
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_note TEXT;
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_info_updated_at TIMESTAMPTZ;
+ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_info_updated_by INTEGER REFERENCES staff(id) ON DELETE SET NULL;

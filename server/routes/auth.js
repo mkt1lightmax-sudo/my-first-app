@@ -49,3 +49,5 @@ router.get("/me", requireAuth, (req, res) => {
 });
 
 module.exports = router;
+// ใช้ร่วมกับ routes อื่นที่ต้องออก cookie ล็อกอินใหม่ (เช่น เปลี่ยนรหัสผ่านตัวเอง)
+module.exports.cookieOptions = cookieOptions;
