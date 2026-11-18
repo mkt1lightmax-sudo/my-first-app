@@ -9,7 +9,8 @@ import MessageContent, { isBareMedia } from "./MessageContent";
 import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
 import { useAuth } from "../../context/AuthContext";
-import { can } from "../../lib/permissions";
+import { can, isOwner } from "../../lib/permissions";
+import DeleteCustomerSheet from "./DeleteCustomerSheet";
 import { BookmarkIcon, CheckCircleIcon, ChevronLeftIcon, ImageIcon, MoreIcon, SendIcon } from "../../components/icons";
 import { blobToBase64, prepareImage, type PreparedImage } from "../../lib/imageResize";
 
@@ -25,6 +26,7 @@ export default function ChatThreadPage() {
   const [pending, setPending] = useState<PreparedImage | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stickerOpen, setStickerOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -210,6 +212,17 @@ export default function ChatThreadPage() {
               <MenuItem danger={!conversation.is_spam} onClick={() => action("spam", { spam: !conversation.is_spam })}>
                 {conversation.is_spam ? "ไม่ใช่สแปม" : "ทำเครื่องหมายว่าเป็นสแปม"}
               </MenuItem>
+              {isOwner(me) && (
+                <MenuItem
+                  danger
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setDeleteOpen(true);
+                  }}
+                >
+                  ลบข้อมูลลูกค้านี้ทั้งหมด…
+                </MenuItem>
+              )}
             </div>
           </>
         )}
@@ -354,6 +367,14 @@ export default function ChatThreadPage() {
             <SendIcon className="h-5 w-5" />
           </button>
         </form>
+      )}
+
+      {deleteOpen && conversation && (
+        <DeleteCustomerSheet
+          conversation={conversation}
+          onDeleted={() => navigate("/chat")}
+          onClose={() => setDeleteOpen(false)}
+        />
       )}
 
       {stickerOpen && <StickerPicker sending={sending} onPick={sendSticker} onClose={() => setStickerOpen(false)} />}

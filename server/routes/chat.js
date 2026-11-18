@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const express = require("express");
 const { query } = require("../db/pool");
 const { requireAuth } = require("../middleware/auth");
-const { can, requirePermission } = require("../lib/permissions");
+const { can, requirePermission, requireOwner } = require("../lib/permissions");
 
 // เซลล์เห็นเฉพาะแชทที่ตัวเองดูแล + ที่ยังไม่มีคนดูแล
 function canSeeConvo(staff, convo) {
@@ -421,6 +421,21 @@ router.put("/conversations/:id/deal", requireAuth, async (req, res) => {
   await addSystemMessage(convo.id, `${req.staff.name} บันทึก: ${label}${money}`);
 
   res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
+});
+
+// ลบข้อมูลลูกค้ารายนี้ทั้งหมด (ตามคำขอลบข้อมูล / PDPA) — เจ้าของเท่านั้น
+// ลบแชท + ข้อความ + รูปที่ส่ง + ยอดขาย + การติดตาม + แจ้งเตือนที่เกี่ยวข้อง (ตั้ง ON DELETE CASCADE ไว้แล้ว)
+// body: { confirm: "<ชื่อลูกค้า หรือ ไอดีแชท>" } กันกดพลาด
+router.delete("/conversations/:id", requireAuth, requireOwner, async (req, res) => {
+  const convo = (await query("SELECT id, display_name FROM chat_conversations WHERE id = $1", [req.params.id])).rows[0];
+  if (!convo) return res.status(404).json({ ok: false, error: "conversation not found" });
+  const expected = [String(convo.id), convo.display_name || ""].filter(Boolean);
+  if (!expected.includes(String(req.body?.confirm || "").trim())) {
+    return res.status(400).json({ ok: false, error: "พิมพ์ชื่อลูกค้าให้ตรงเพื่อยืนยันการลบ" });
+  }
+  await query("DELETE FROM chat_conversations WHERE id = $1", [convo.id]);
+  console.log(`chat conversation ${convo.id} deleted by staff ${req.staff.id}`);
+  res.json({ ok: true });
 });
 
 // body: { follow: true|false } — ติดตามของแต่ละคน (ดูเท่านั้นก็ติดตามได้)
