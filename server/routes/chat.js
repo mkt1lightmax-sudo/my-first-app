@@ -14,6 +14,7 @@ const meta = require("../lib/meta");
 const accountsRouter = require("./chatAccounts");
 const reportsRouter = require("./chatReports");
 const push = require("../lib/push");
+const lineStickers = require("../lib/lineStickers");
 
 const router = express.Router();
 
@@ -653,6 +654,41 @@ router.post("/conversations/:id/images", requireAuth, requirePermission("chat.re
   }
 
   const message = await saveOutgoing({ convo, staff: req.staff, type: "image", text: "[รูปภาพ]", msgMeta: { mediaToken: token }, externalId });
+  res.json({ ok: true, message });
+});
+
+// ชุดสติกเกอร์ที่ส่งได้ (ให้หน้าเว็บสร้างแผงเลือกสติกเกอร์)
+router.get("/stickers", requireAuth, requirePermission("chat.reply"), (req, res) => {
+  res.json({ ok: true, packages: lineStickers.PACKAGES });
+});
+
+// ส่งสติกเกอร์ให้ลูกค้า (เฉพาะแชท LINE) — body: { packageId, stickerId }
+router.post("/conversations/:id/stickers", requireAuth, requirePermission("chat.reply"), async (req, res) => {
+  const { packageId, stickerId } = req.body || {};
+  if (!lineStickers.isAllowed(packageId, stickerId)) {
+    return res.status(400).json({ ok: false, error: "สติกเกอร์นี้ LINE ไม่อนุญาตให้ OA ส่ง" });
+  }
+  const ctx = await loadForSend(req, res);
+  if (!ctx) return;
+  const { convo, account } = ctx;
+  if (account.channel !== "line") {
+    return res.status(400).json({ ok: false, error: "ส่งสติกเกอร์ได้เฉพาะแชท LINE — ช่องทางนี้ใช้การแนบรูปแทน" });
+  }
+
+  try {
+    await sendLine(account, convo, { type: "sticker", packageId: String(packageId), stickerId: String(stickerId) });
+  } catch (err) {
+    console.error("send sticker error:", err);
+    return res.status(502).json({ ok: false, error: `ส่งสติกเกอร์ไป ${account.name} ไม่สำเร็จ` });
+  }
+
+  const message = await saveOutgoing({
+    convo,
+    staff: req.staff,
+    type: "sticker",
+    text: "[สติกเกอร์]",
+    msgMeta: { packageId: String(packageId), stickerId: String(stickerId) },
+  });
   res.json({ ok: true, message });
 });
 

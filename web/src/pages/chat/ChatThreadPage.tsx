@@ -4,6 +4,7 @@ import { api, ApiError } from "../../lib/api";
 import { CHANNEL_LABELS, formatBaht, metaReplyHoursLeft, ticketNumber, type ChatMessage, type Conversation } from "../../lib/chat";
 import TicketDetailsSheet from "./TicketDetailsSheet";
 import CustomerInfoCard from "./CustomerInfoCard";
+import StickerPicker, { rememberSticker } from "./StickerPicker";
 import MessageContent, { isBareMedia } from "./MessageContent";
 import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
@@ -23,6 +24,7 @@ export default function ChatThreadPage() {
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PreparedImage | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -86,6 +88,23 @@ export default function ChatThreadPage() {
       setPending(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ส่งรูปไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendSticker(s: { packageId: number; stickerId: number }) {
+    if (sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/stickers`, s);
+      setMessages((prev) => [...prev, d.message]);
+      rememberSticker(s);
+      setStickerOpen(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "ส่งสติกเกอร์ไม่สำเร็จ");
+      setStickerOpen(false);
     } finally {
       setSending(false);
     }
@@ -300,6 +319,18 @@ export default function ChatThreadPage() {
           >
             <ImageIcon className="h-6 w-6" />
           </button>
+          {conversation?.channel === "line" && (
+            <button
+              type="button"
+              onClick={() => setStickerOpen(true)}
+              disabled={sending}
+              aria-label="สติกเกอร์"
+              title="สติกเกอร์"
+              className="-ml-2 flex h-11 w-9 flex-shrink-0 items-center justify-center rounded-full text-2xl leading-none transition active:bg-gray-100 disabled:opacity-40"
+            >
+              😊
+            </button>
+          )}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -324,6 +355,8 @@ export default function ChatThreadPage() {
           </button>
         </form>
       )}
+
+      {stickerOpen && <StickerPicker sending={sending} onPick={sendSticker} onClose={() => setStickerOpen(false)} />}
 
       {/* ดูรูปก่อนส่ง */}
       {pending && (
