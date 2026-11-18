@@ -71,11 +71,43 @@ async function sendImage(token, userId, url) {
   return data.message_id || null;
 }
 
+// หาว่า token เป็นของเพจไหน
+// วิธีหลัก: ถาม Meta ผ่าน /debug_token ด้วยกุญแจของแอปเรา (META_APP_ID + META_APP_SECRET)
+//   → ไม่ต้องใช้สิทธิ์ pages_read_engagement และยังเช็กได้ว่า token มาจากแอปเราจริง เป็น token ของเพจ และมีสิทธิ์ส่งข้อความ
+// ถ้าไม่ได้ตั้ง META_APP_ID ไว้ ใช้วิธีเดิม (/me) ซึ่งต้องมีสิทธิ์ pages_read_engagement
+async function identifyPage(token) {
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appId || !appSecret) return graphFetch(token, "/me?fields=id,name");
+
+  const u = new URL(`${GRAPH}/debug_token`);
+  u.searchParams.set("input_token", token);
+  u.searchParams.set("access_token", `${appId}|${appSecret}`);
+  const res = await fetch(u);
+  const body = await res.json().catch(() => ({}));
+  const d = body.data || {};
+  const fail = (message) => Object.assign(new Error(message), { metaError: { message } });
+  if (!res.ok || body.error) throw fail(body.error?.message || `debug_token ${res.status}`);
+  if (!d.is_valid) throw fail(d.error?.message || "token หมดอายุหรือถูกยกเลิกแล้ว");
+  if (String(d.app_id) !== String(appId)) throw fail("token นี้สร้างจาก Meta App ตัวอื่น ไม่ใช่ LIGHTMAX Inbox");
+  if (d.type !== "PAGE" || !d.profile_id) throw fail("นี่ไม่ใช่ token ของเพจ — ใช้ token จากหน้า Messenger API Settings");
+  if (Array.isArray(d.scopes) && !d.scopes.includes("pages_messaging")) throw fail("token ยังไม่มีสิทธิ์ pages_messaging");
+
+  // ชื่อเพจ: ลองอ่าน ถ้าไม่มีสิทธิ์ก็ไม่เป็นไร (ใช้ชื่อที่ทีมตั้งในแอปแทน)
+  let name = null;
+  try {
+    name = (await graphFetch(token, `/${d.profile_id}?fields=name`)).name || null;
+  } catch {
+    // ไม่มีสิทธิ์อ่านชื่อเพจ
+  }
+  return { id: String(d.profile_id), name: name || `เพจ ${d.profile_id}` };
+}
+
 // ใช้ตอนแอดมินเพิ่มบัญชี — เช็กว่า token ใช้ได้ และหาไอดีเพจ (+ IG ที่ผูกอยู่ เฉพาะตอนเพิ่ม IG)
 // ขอข้อมูล IG แยกต่างหาก เพราะ token ของเพจที่ได้จากหน้า Messenger มักไม่มีสิทธิ์ IG
 // ถ้าขอรวมกัน Meta จะปฏิเสธทั้งคำขอ ทั้งที่ token ใช้กับ Messenger ได้ปกติ
 async function getPageInfo(token, { withInstagram = false } = {}) {
-  const page = await graphFetch(token, "/me?fields=id,name");
+  const page = await identifyPage(token);
   if (withInstagram) {
     const ig = await graphFetch(token, `/${page.id}?fields=instagram_business_account{id,username}`);
     page.instagram_business_account = ig.instagram_business_account || null;

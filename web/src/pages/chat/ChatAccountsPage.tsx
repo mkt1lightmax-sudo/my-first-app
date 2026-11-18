@@ -86,7 +86,9 @@ export default function ChatAccountsPage() {
         )}
       </div>
 
-      <FacebookConnectCard onDone={load} />
+      {/* ปุ่ม "เชื่อมด้วย Facebook" ซ่อนไว้ก่อน: Meta App แบบ Business ที่ใช้อยู่เพิ่ม Facebook Login ไม่ได้
+          ถ้าวันหลังสร้าง Meta App สำหรับล็อกอินแยก ค่อยเปิด (ตั้ง VITE_FB_CONNECT=1 ตอน build) */}
+      {import.meta.env.VITE_FB_CONNECT === "1" && <FacebookConnectCard onDone={load} />}
 
       {notice && <p className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{notice}</p>}
       {error && <p className="mb-3 text-sm text-brand-red">{error}</p>}
