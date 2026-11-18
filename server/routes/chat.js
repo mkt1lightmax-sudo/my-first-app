@@ -11,11 +11,14 @@ const NOT_YOURS = { ok: false, error: "แชทนี้มีพนักง�
 const line = require("../lib/line");
 const meta = require("../lib/meta");
 const accountsRouter = require("./chatAccounts");
+const reportsRouter = require("./chatReports");
 
 const router = express.Router();
 
 // จัดการบัญชี LINE OA / เพจ / IG (หลายบัญชี)
 router.use("/accounts", accountsRouter);
+// รายงานยอดขายจากแชท
+router.use("/reports", reportsRouter);
 
 // reply token ของ LINE ใช้ได้ไม่นาน — เผื่อเวลาไว้ให้ปลอดภัย
 const REPLY_TOKEN_MAX_AGE_MS = 50 * 1000;
@@ -154,11 +157,12 @@ async function recordMessage({ account, userId, getProfile, direction, type, tex
       `UPDATE chat_conversations
        SET last_message_preview = $2, last_message_at = $3, last_inbound_at = $3, unread_count = unread_count + 1,
            last_message_direction = 'in', status = 'open', closed_at = NULL, closed_by_staff_id = NULL,
+           ticket_seq = ticket_seq + CASE WHEN status = 'closed' THEN 1 ELSE 0 END,
            reply_token = $4, reply_token_at = CASE WHEN $4::text IS NULL THEN NULL ELSE now() END
        WHERE id = $1`,
       [convo.id, text, at, replyToken]
     );
-    if (before?.status === "closed") await addSystemMessage(convo.id, "ลูกค้าทักมาใหม่ — เปิดทิกเก็ตอีกครั้งอัตโนมัติ");
+    if (before?.status === "closed") await addSystemMessage(convo.id, "ลูกค้าทักมาใหม่ — เปิดทิกเก็ตใหม่อัตโนมัติ");
   } else {
     await query(
       "UPDATE chat_conversations SET last_message_preview = $2, last_message_at = $3, last_message_direction = 'out' WHERE id = $1",
@@ -183,12 +187,14 @@ const convoFrom = (staffId) => `chat_conversations c
   LEFT JOIN staff s ON s.id = c.assigned_staff_id
   LEFT JOIN staff cs ON cs.id = c.closed_by_staff_id
   LEFT JOIN chat_accounts a ON a.id = c.account_id
-  LEFT JOIN chat_follows f ON f.conversation_id = c.id AND f.staff_id = ${Number(staffId) || 0}`;
+  LEFT JOIN chat_follows f ON f.conversation_id = c.id AND f.staff_id = ${Number(staffId) || 0}
+  LEFT JOIN chat_deals d ON d.conversation_id = c.id AND d.ticket_seq = c.ticket_seq`;
 
 const CONVO_COLUMNS = `c.id, c.channel, c.account_id, a.name AS account_name, c.display_name, c.picture_url,
   c.last_message_preview, c.last_message_at, c.last_inbound_at, c.unread_count, c.last_message_direction,
   c.status, c.closed_at, cs.name AS closed_by_name, c.is_spam, (f.staff_id IS NOT NULL) AS followed,
-  c.assigned_staff_id, s.name AS assigned_staff_name, c.tags`;
+  c.assigned_staff_id, s.name AS assigned_staff_name, c.tags,
+  c.ticket_seq, d.amount::float AS deal_amount, d.outcome AS deal_outcome, d.note AS deal_note`;
 
 function selectConvo(id, staffId) {
   return query(`SELECT ${CONVO_COLUMNS} FROM ${convoFrom(staffId)} WHERE c.id = $1`, [id]).then((r) => r.rows[0]);
@@ -310,6 +316,43 @@ router.post("/conversations/:id/spam", requireAuth, async (req, res) => {
     convo.id,
     spam,
   ]);
+  res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
+});
+
+// ยอดขายของทิกเก็ตรอบปัจจุบัน — body: { amount: number|null, outcome: "won"|"lost"|null, note?: string }
+// ยอดจะนับให้ "ผู้ดูแลแชท" ตอนบันทึก (ถ้ายังไม่มีผู้ดูแล นับให้คนที่บันทึก)
+router.put("/conversations/:id/deal", requireAuth, async (req, res) => {
+  const convo = await loadForAction(req, res, "chat.reply");
+  if (!convo) return;
+  const body = req.body || {};
+
+  let amount = body.amount;
+  if (amount === "" || amount === undefined) amount = null;
+  if (amount !== null) {
+    amount = Number(amount);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 9999999999) {
+      return res.status(400).json({ ok: false, error: "ยอดขายต้องเป็นตัวเลข 0 ขึ้นไป" });
+    }
+    amount = Math.round(amount * 100) / 100;
+  }
+  const outcome = body.outcome === "won" || body.outcome === "lost" ? body.outcome : null;
+  if (body.outcome && !outcome) return res.status(400).json({ ok: false, error: "สถานะการปิดการขายไม่ถูกต้อง" });
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) || null : null;
+  const creditTo = convo.assigned_staff_id || req.staff.id;
+
+  await query(
+    `INSERT INTO chat_deals (conversation_id, ticket_seq, amount, outcome, note, staff_id, updated_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (conversation_id, ticket_seq)
+     DO UPDATE SET amount = EXCLUDED.amount, outcome = EXCLUDED.outcome, note = EXCLUDED.note,
+                   staff_id = EXCLUDED.staff_id, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [convo.id, convo.ticket_seq, amount, outcome, note, creditTo, req.staff.id]
+  );
+
+  const label = outcome === "won" ? "ปิดการขายได้" : outcome === "lost" ? "ปิดการขายไม่ได้" : "ยังไม่สรุป";
+  const money = amount !== null ? ` ยอด ${amount.toLocaleString("th-TH")} บาท` : "";
+  await addSystemMessage(convo.id, `${req.staff.name} บันทึก: ${label}${money}`);
+
   res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
 });
 

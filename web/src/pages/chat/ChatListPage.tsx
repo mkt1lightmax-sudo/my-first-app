@@ -90,6 +90,14 @@ export default function ChatListPage() {
       <div className="sticky -top-5 z-10 bg-gray-50/95 px-4 pb-3 pt-4 backdrop-blur">
         <div className="flex items-center gap-2">
           <h1 className="flex-1 text-2xl font-semibold tracking-tight text-gray-900">แชท</h1>
+          {can(staff, "reports.view") && (
+            <Link
+              to="/chat/report"
+              className="flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-gray-200"
+            >
+              <span aria-hidden>📈</span>ยอดขาย
+            </Link>
+          )}
           <IconButton label="ค้นหา" active={searchOpen || !!search} onClick={() => setSearchOpen((v) => !v)}>
             <SearchIcon className="h-5 w-5" />
           </IconButton>

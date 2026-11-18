@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
-import { CHANNEL_LABELS, metaReplyHoursLeft, type ChatMessage, type Conversation } from "../../lib/chat";
+import { CHANNEL_LABELS, formatBaht, metaReplyHoursLeft, ticketNumber, type ChatMessage, type Conversation } from "../../lib/chat";
+import TicketDetailsSheet from "./TicketDetailsSheet";
 import { Avatar } from "./ChatListPage";
 import CustomerPanel from "./CustomerPanel";
 import { useAuth } from "../../context/AuthContext";
@@ -19,6 +20,7 @@ export default function ChatThreadPage() {
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastCount = useRef(0);
@@ -154,6 +156,41 @@ export default function ChatThreadPage() {
       </div>
 
       {conversation && <CustomerPanel conversation={conversation} onChange={setConversation} />}
+      {conversation && (
+        <button
+          onClick={() => setTicketOpen(true)}
+          className="flex items-center gap-2 border-b border-gray-100 bg-white px-4 py-2.5 text-left active:bg-gray-50"
+        >
+          <span className="font-mono text-xs text-gray-500">{ticketNumber(conversation)}</span>
+          {conversation.deal_amount !== null && (
+            <span className="text-sm font-semibold text-gray-900">{formatBaht(conversation.deal_amount)}</span>
+          )}
+          {conversation.deal_outcome && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                conversation.deal_outcome === "won" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-red-50 text-brand-red ring-1 ring-red-200"
+              }`}
+            >
+              {conversation.deal_outcome === "won" ? "ปิดการขายได้" : "ปิดการขายไม่ได้"}
+            </span>
+          )}
+          <span className="ml-auto text-xs text-brand-navy">
+            {conversation.deal_amount === null && !conversation.deal_outcome && canReply ? "+ ยอดขาย" : "รายละเอียดทิกเก็ต"} ›
+          </span>
+        </button>
+      )}
+      {ticketOpen && conversation && (
+        <TicketDetailsSheet
+          conversation={conversation}
+          canEdit={canReply}
+          onSaved={(c) => {
+            setConversation(c);
+            setTicketOpen(false);
+            load();
+          }}
+          onClose={() => setTicketOpen(false)}
+        />
+      )}
       {conversation?.is_spam && <div className="bg-amber-50 px-4 py-2 text-xs text-amber-800">แชทนี้ถูกทำเครื่องหมายว่าเป็นสแปม</div>}
 
       {/* ข้อความ */}

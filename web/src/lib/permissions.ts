@@ -12,6 +12,8 @@ const PERMISSIONS = {
   "chat.viewAll": ["admin", "viewer"],
   "chat.reply": ["admin", "sales"],
   "chat.assignOthers": ["admin"],
+  "reports.view": ["admin", "sales", "viewer"],
+  "reports.viewAll": ["admin", "viewer"],
   "staff.manage": ["admin"],
 } as const;
 

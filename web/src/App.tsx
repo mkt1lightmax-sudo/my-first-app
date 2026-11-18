@@ -16,6 +16,7 @@ import StaffFormPage from './pages/staff/StaffFormPage'
 import ChatListPage from './pages/chat/ChatListPage'
 import ChatThreadPage from './pages/chat/ChatThreadPage'
 import ChatAccountsPage from './pages/chat/ChatAccountsPage'
+import ChatReportPage from './pages/chat/ChatReportPage'
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
               <Route path="/staff/new" element={<StaffFormPage />} />
               <Route path="/chat" element={<ChatListPage />} />
               <Route path="/chat/accounts" element={<ChatAccountsPage />} />
+              <Route path="/chat/report" element={<RequirePermission permission="reports.view"><ChatReportPage /></RequirePermission>} />
               <Route path="/chat/:id" element={<RequirePermission permission="chat.view"><ChatThreadPage /></RequirePermission>} />
             </Route>
           </Route>

@@ -20,7 +20,20 @@ export type Conversation = {
   is_spam: boolean;
   followed: boolean;
   last_message_direction: "in" | "out" | null;
+  ticket_seq: number;
+  deal_amount: number | null;
+  deal_outcome: "won" | "lost" | null;
+  deal_note: string | null;
 };
+
+export function ticketNumber(c: Pick<Conversation, "id" | "ticket_seq">) {
+  return `#${c.id}-${c.ticket_seq}`;
+}
+
+export function formatBaht(n: number | null | undefined) {
+  if (n === null || n === undefined) return "-";
+  return "฿" + n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+}
 
 export type ChatCounts = { mine: number; open: number; unread: number };
 
