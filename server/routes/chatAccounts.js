@@ -79,16 +79,10 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
 
     // สมัครรับข้อความของเพจนี้เข้าแอปเราอัตโนมัติ
     let warning = null;
-    try {
-      await fetch(
-        `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v24.0"}/${page.id}/subscribed_apps?subscribed_fields=messages,message_echoes&access_token=${encodeURIComponent(token)}`,
-        { method: "POST" }
-      ).then(async (r) => {
-        if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => "")).slice(0, 200)}`);
-      });
-    } catch (err) {
-      console.error("meta subscribed_apps failed:", err.message);
-      warning = "เพิ่มบัญชีแล้ว แต่สมัครรับข้อความของเพจอัตโนมัติไม่สำเร็จ — อาจต้องตั้งค่า Webhook ในหน้า Meta App เอง";
+    const subErr = await meta.subscribePage(token, page.id);
+    if (subErr) {
+      console.error("meta subscribed_apps failed:", subErr);
+      warning = `เพิ่มบัญชีแล้ว แต่สมัครรับข้อความของเพจอัตโนมัติไม่สำเร็จ (Meta: ${String(subErr).slice(0, 160)}) — ตั้ง Webhook subscriptions ในหน้า Meta App เองได้`;
     }
 
     name = name || (channel === "instagram" ? `IG @${ig.username || ig.id}` : page.name);

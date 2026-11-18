@@ -100,11 +100,16 @@ router.post("/meta/webhook", async (req, res) => {
     hasSecret: Boolean(process.env.META_APP_SECRET),
     hasSigHeader: Boolean(req.get("x-hub-signature-256")),
     object: req.body?.object ?? null,
-    entries: (req.body?.entry || []).map((e) => ({
-      id: String(e.id),
-      messaging: (e.messaging || []).map((m) => (m.message ? (m.message.is_echo ? "echo" : "message") : Object.keys(m).filter((k) => !["sender", "recipient", "timestamp"].includes(k))[0] || "other")),
-      changes: (e.changes || []).map((c) => c.field),
-    })),
+    entries: (req.body?.entry || []).map((e) => {
+      const kind = (m) =>
+        m.message ? (m.message.is_echo ? "echo" : "message") : Object.keys(m).filter((k) => !["sender", "recipient", "timestamp"].includes(k))[0] || "other";
+      return {
+        id: String(e.id),
+        messaging: (e.messaging || []).map(kind),
+        standby: (e.standby || []).map(kind),
+        changes: (e.changes || []).map((c) => c.field),
+      };
+    }),
   };
   if (!sigOk) {
     await logMetaWebhook({ ...summary, result: "invalid signature" });
@@ -123,7 +128,8 @@ router.post("/meta/webhook", async (req, res) => {
       matched.push(account ? account.id : null);
       if (!account) continue;
 
-      for (const event of entry.messaging || []) {
+      // messaging = แอปเราเป็นผู้รับหลัก / standby = มีโปรแกรมอื่นเป็นผู้รับหลักของเพจ (เราเห็นข้อความแต่ตอบอาจไม่ได้)
+      for (const event of [...(entry.messaging || []), ...(entry.standby || [])]) {
         try {
           await handleMetaEvent(account, event);
         } catch (err) {

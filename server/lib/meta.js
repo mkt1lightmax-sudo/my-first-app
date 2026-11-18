@@ -144,7 +144,12 @@ function messageMeta(message) {
 // ให้แอปเรารับข้อความของเพจนี้ (webhook) — คืน null ถ้าสำเร็จ หรือข้อความ error
 async function subscribePage(token, pageId) {
   try {
-    await graphFetch(token, `/${encodeURIComponent(pageId)}/subscribed_apps?subscribed_fields=messages,message_echoes`, { method: "POST" });
+    // standby + messaging_handovers: ให้เห็นข้อความด้วย แม้โปรแกรมอื่น (เช่น โปรแกรมรวมแชทเดิม) เป็นผู้รับหลักของเพจ
+    await graphFetch(
+      token,
+      `/${encodeURIComponent(pageId)}/subscribed_apps?subscribed_fields=messages,message_echoes,standby,messaging_handovers`,
+      { method: "POST" }
+    );
     return null;
   } catch (err) {
     return err.metaError?.message || err.message;
