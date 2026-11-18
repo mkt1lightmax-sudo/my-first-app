@@ -4,6 +4,7 @@ import { api, ApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { isOwner } from "../../lib/permissions";
 import { CHANNEL_COLORS, CHANNEL_LABELS, type ChatAccount } from "../../lib/chat";
+import FacebookConnectCard from "./FacebookConnectCard";
 
 type NewChannel = "line" | "messenger" | "instagram";
 
@@ -84,6 +85,8 @@ export default function ChatAccountsPage() {
           </button>
         )}
       </div>
+
+      <FacebookConnectCard onDone={load} />
 
       {notice && <p className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{notice}</p>}
       {error && <p className="mb-3 text-sm text-brand-red">{error}</p>}

@@ -109,4 +109,81 @@ function messageMeta(message) {
   return { url: att.payload?.url || null, stickerId: att.payload?.sticker_id || null, title: att.payload?.title || null };
 }
 
-module.exports = { verifySignature, getProfile, send, sendImage, getPageInfo, messageToText, messageMeta, REPLY_WINDOW_MS };
+// ให้แอปเรารับข้อความของเพจนี้ (webhook) — คืน null ถ้าสำเร็จ หรือข้อความ error
+async function subscribePage(token, pageId) {
+  try {
+    await graphFetch(token, `/${encodeURIComponent(pageId)}/subscribed_apps?subscribed_fields=messages,message_echoes`, { method: "POST" });
+    return null;
+  } catch (err) {
+    return err.metaError?.message || err.message;
+  }
+}
+
+// ---------- เชื่อมด้วย Facebook (OAuth) — ไม่ต้องคัดลอก token เอง ----------
+const OAUTH_SCOPES = [
+  "pages_show_list",
+  "pages_messaging",
+  "pages_manage_metadata",
+  "pages_read_engagement",
+  "business_management",
+  "instagram_basic",
+  "instagram_manage_messages",
+];
+
+function oauthDialogUrl({ appId, redirectUri, state }) {
+  const u = new URL(`https://www.facebook.com/${process.env.META_GRAPH_VERSION || "v24.0"}/dialog/oauth`);
+  u.searchParams.set("client_id", appId);
+  u.searchParams.set("redirect_uri", redirectUri);
+  u.searchParams.set("state", state);
+  u.searchParams.set("response_type", "code");
+  u.searchParams.set("scope", OAUTH_SCOPES.join(","));
+  return u.toString();
+}
+
+async function graphGet(path, params) {
+  const u = new URL(`${GRAPH}${path}`);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  const res = await fetch(u);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(`Meta API ${res.status}: ${data?.error?.message || ""}`);
+    err.metaError = data?.error;
+    throw err;
+  }
+  return data;
+}
+
+// code → user token (อายุยาว) → รายชื่อเพจพร้อม Page token (Page token ที่ได้จาก user token อายุยาวจะไม่หมดอายุ)
+async function pagesFromOAuthCode({ appId, appSecret, redirectUri, code }) {
+  const short = await graphGet("/oauth/access_token", { client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code });
+  const long = await graphGet("/oauth/access_token", {
+    grant_type: "fb_exchange_token",
+    client_id: appId,
+    client_secret: appSecret,
+    fb_exchange_token: short.access_token,
+  });
+  const pages = [];
+  let next = `/me/accounts`;
+  let params = { access_token: long.access_token, fields: "id,name,access_token,instagram_business_account{id,username}", limit: "100" };
+  for (let i = 0; i < 5 && next; i++) {
+    const d = await graphGet(next, params);
+    for (const p of d.data || []) pages.push(p);
+    next = d.paging?.next ? new URL(d.paging.next).pathname.replace(/^\/v[\d.]+/, "") : null;
+    params = d.paging?.cursors?.after ? { ...params, after: d.paging.cursors.after } : params;
+  }
+  return pages;
+}
+
+module.exports = {
+  verifySignature,
+  getProfile,
+  send,
+  sendImage,
+  getPageInfo,
+  subscribePage,
+  oauthDialogUrl,
+  pagesFromOAuthCode,
+  messageToText,
+  messageMeta,
+  REPLY_WINDOW_MS,
+};

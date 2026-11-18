@@ -9,6 +9,9 @@ const meta = require("../lib/meta");
 
 const router = express.Router();
 
+// เชื่อมเพจ / IG ด้วยการล็อกอิน Facebook (ไม่ต้องคัดลอก token เอง)
+router.use("/meta", require("./metaConnect"));
+
 const PUBLIC_COLUMNS = `id, channel, name, is_active, meta_page_id, meta_ig_id, created_at,
   (line_access_token IS NOT NULL OR meta_page_token IS NOT NULL) AS has_token`;
 
