@@ -12,6 +12,7 @@ const line = require("../lib/line");
 const meta = require("../lib/meta");
 const accountsRouter = require("./chatAccounts");
 const reportsRouter = require("./chatReports");
+const push = require("../lib/push");
 
 const router = express.Router();
 
@@ -165,12 +166,33 @@ async function recordMessage({ account, userId, getProfile, direction, type, tex
       [convo.id, text, at, replyToken]
     );
     if (before?.status === "closed") await addSystemMessage(convo.id, "ลูกค้าทักมาใหม่ — เปิดทิกเก็ตใหม่อัตโนมัติ");
+    await notifyNewMessage(convo.id, account, text);
   } else {
     await query(
       "UPDATE chat_conversations SET last_message_preview = $2, last_message_at = $3, last_message_direction = 'out' WHERE id = $1",
       [convo.id, text, at]
     );
   }
+}
+
+// แจ้งเตือนเด้งเมื่อลูกค้าทักมา:
+//   มีผู้ดูแลแล้ว → แจ้งเฉพาะผู้ดูแล / ยังไม่มีผู้ดูแล → แจ้งเจ้าของ แอดมิน และเซลล์ทุกคน
+// สแปมไม่แจ้งเตือน
+async function notifyNewMessage(conversationId, account, text) {
+  const c = (
+    await query("SELECT id, display_name, assigned_staff_id, is_spam FROM chat_conversations WHERE id = $1", [conversationId])
+  ).rows[0];
+  if (!c || c.is_spam) return;
+  const recipients = c.assigned_staff_id
+    ? [c.assigned_staff_id]
+    : (await query("SELECT id FROM staff WHERE is_owner OR role IN ('admin', 'sales')")).rows.map((r) => r.id);
+  const preview = String(text || "").replace(/\s+/g, " ").slice(0, 120);
+  await push.sendToStaff(recipients, {
+    title: `💬 ${c.display_name || "ลูกค้า"} · ${account.name}`,
+    body: preview || "ส่งข้อความใหม่",
+    url: `/chat/${c.id}`,
+    tag: `chat-${c.id}`, // ข้อความรัวๆ จากลูกค้าคนเดียวกัน แสดงเป็นแจ้งเตือนเดียว
+  });
 }
 
 // ข้อความระบบในแชท เช่น "ปิดทิกเก็ตโดย ..." (แสดงตรงกลาง ลูกค้าไม่เห็น)
@@ -370,6 +392,25 @@ router.post("/conversations/:id/follow", requireAuth, async (req, res) => {
   res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });
 });
 
+// จำนวนแชทที่ยังไม่อ่าน (ที่ฉันเห็น) — ใช้แสดงตัวเลขแดงที่แท็บ "แชท" ทุกหน้า
+// latest = เวลาข้อความลูกค้าล่าสุด ใช้ตัดสินว่าจะเล่นเสียงเตือนไหม
+router.get("/unread-count", requireAuth, requirePermission("chat.view"), async (req, res) => {
+  const params = [];
+  let scope = "";
+  if (!can(req.staff, "chat.viewAll")) {
+    params.push(req.staff.id);
+    scope = "AND (assigned_staff_id IS NULL OR assigned_staff_id = $1)";
+  }
+  const r = (
+    await query(
+      `SELECT COUNT(*) FILTER (WHERE unread_count > 0)::int AS unread, MAX(last_inbound_at) AS latest
+       FROM chat_conversations WHERE status = 'open' AND NOT is_spam ${scope}`,
+      params
+    )
+  ).rows[0];
+  res.json({ ok: true, unread: r.unread, latest: r.latest });
+});
+
 // ป้ายทั้งหมด (ป้ายตั้งต้น + ป้ายที่ทีมสร้างเอง)
 router.get("/tags", requireAuth, requirePermission("chat.view"), async (req, res) => {
   const result = await query("SELECT DISTINCT unnest(tags) AS tag FROM chat_conversations");
@@ -409,6 +450,12 @@ router.patch("/conversations/:id", requireAuth, requirePermission("chat.reply"),
       "INSERT INTO notifications (staff_id, type, message, chat_conversation_id) VALUES ($1, 'chat_assigned', $2, $3)",
       [assigned, `คุณได้รับมอบหมายให้ดูแลแชทลูกค้า: ${convo.display_name || "ลูกค้า"}`, convo.id]
     );
+    await push.sendToStaff([assigned], {
+      title: "📌 ได้รับมอบหมายแชท",
+      body: `${req.staff.name} มอบหมายให้คุณดูแล ${convo.display_name || "ลูกค้า"}`,
+      url: `/chat/${convo.id}`,
+      tag: `chat-${convo.id}`,
+    });
   }
 
   res.json({ ok: true, conversation: await selectConvo(convo.id, req.staff.id) });

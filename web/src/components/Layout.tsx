@@ -7,6 +7,8 @@ import { HomeIcon, UsersIcon, BriefcaseIcon, CalendarIcon, BellIcon, ChatIcon, U
 import { staffRoleLabel } from "../lib/staff";
 import { formatNotificationTime, type Notification } from "../lib/notifications";
 import { can, isOwner } from "../lib/permissions";
+import { useChatUnread } from "../lib/useChatUnread";
+import NotificationSettings from "./NotificationSettings";
 
 const allTabs = [
   { to: "/", label: "หน้าหลัก", icon: HomeIcon, end: true },
@@ -19,6 +21,7 @@ const allTabs = [
 export default function Layout() {
   const { staff, logout } = useAuth();
   const tabs = allTabs.filter((t) => t.to !== "/chat" || can(staff, "chat.view"));
+  const chatUnread = useChatUnread(can(staff, "chat.view"));
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -151,6 +154,8 @@ export default function Layout() {
                 </Link>
               )}
 
+              {can(staff, "chat.view") && <NotificationSettings />}
+
               <button
                 onClick={() => logout()}
                 className="mt-2 flex w-full items-center gap-2 rounded-lg border border-brand-red px-3 py-2 text-sm font-medium text-brand-red hover:bg-brand-red/5"
@@ -181,7 +186,14 @@ export default function Layout() {
           >
             {({ isActive }) => (
               <>
-                <tab.icon className={`h-6 w-6 ${isActive ? "" : "opacity-70"}`} />
+                <span className="relative">
+                  <tab.icon className={`h-6 w-6 ${isActive ? "" : "opacity-70"}`} />
+                  {tab.to === "/chat" && chatUnread > 0 && (
+                    <span className="absolute -right-2.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-red px-1 text-[10px] font-bold text-white ring-2 ring-white">
+                      {chatUnread > 99 ? "99+" : chatUnread}
+                    </span>
+                  )}
+                </span>
                 <span className={isActive ? "font-medium" : ""}>{tab.label}</span>
               </>
             )}
