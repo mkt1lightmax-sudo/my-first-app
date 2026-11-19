@@ -225,7 +225,7 @@ async function notifyNewMessage(conversationId, account, text) {
   if (!c || c.is_spam) return;
   const recipients = c.assigned_staff_id
     ? [c.assigned_staff_id]
-    : (await query("SELECT id FROM staff WHERE is_owner OR role IN ('admin', 'sales')")).rows.map((r) => r.id);
+    : (await query("SELECT id FROM staff WHERE is_owner OR role IN ('admin', 'assistant', 'sales')")).rows.map((r) => r.id);
   const preview = String(text || "").replace(/\s+/g, " ").slice(0, 120);
   await push.sendToStaff(recipients, {
     title: `💬 ${c.display_name || "ลูกค้า"} · ${account.name}`,

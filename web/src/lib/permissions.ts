@@ -4,16 +4,16 @@
 type StaffLike = { id: number; role: string; is_owner?: boolean } | null | undefined;
 
 const PERMISSIONS = {
-  "customers.edit": ["admin", "sales", "surveyor"],
-  "appointments.create": ["admin", "sales"],
-  "appointments.editAny": ["admin", "sales"],
+  "customers.edit": ["admin", "assistant", "sales", "surveyor"],
+  "appointments.create": ["admin", "assistant", "sales"],
+  "appointments.editAny": ["admin", "assistant", "sales"],
   "appointments.editOwn": ["surveyor", "installer"],
-  "chat.view": ["admin", "sales", "viewer"],
-  "chat.viewAll": ["admin", "viewer"],
-  "chat.reply": ["admin", "sales"],
-  "chat.assignOthers": ["admin"],
-  "reports.view": ["admin", "sales", "viewer"],
-  "reports.viewAll": ["admin", "viewer"],
+  "chat.view": ["admin", "assistant", "sales", "viewer"],
+  "chat.viewAll": ["admin", "assistant", "viewer"],
+  "chat.reply": ["admin", "assistant", "sales"],
+  "chat.assignOthers": ["admin", "assistant"],
+  "reports.view": ["admin", "assistant", "sales", "viewer"],
+  "reports.viewAll": ["admin", "assistant", "viewer"],
   "staff.manage": ["admin"],
 } as const;
 

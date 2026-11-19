@@ -1,17 +1,17 @@
 // สิทธิ์ของแต่ละตำแหน่ง — แก้ที่ไฟล์นี้ที่เดียว (หน้าเว็บมีสำเนาใน web/src/lib/permissions.ts ต้องแก้ให้ตรงกัน)
 //
-// ตำแหน่ง: เจ้าของ (admin + is_owner) / admin / sales / surveyor / installer / viewer
+// ตำแหน่ง: เจ้าของ (admin + is_owner) / admin / assistant (ผู้ช่วยแอดมิน: เหมือนแอดมิน แต่จัดการพนักงานและลบงานไม่ได้) / sales / surveyor / installer / viewer
 const PERMISSIONS = {
-  "customers.edit": ["admin", "sales", "surveyor"],        // เพิ่ม/แก้ข้อมูลลูกค้า
-  "appointments.create": ["admin", "sales"],               // สร้างงานนัดหมาย
-  "appointments.editAny": ["admin", "sales"],              // แก้งานของทุกคน
+  "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // เพิ่ม/แก้ข้อมูลลูกค้า
+  "appointments.create": ["admin", "assistant", "sales"],               // สร้างงานนัดหมาย
+  "appointments.editAny": ["admin", "assistant", "sales"],              // แก้งานของทุกคน
   "appointments.editOwn": ["surveyor", "installer"],       // แก้เฉพาะงานที่มอบหมายให้ตัวเอง
-  "chat.view": ["admin", "sales", "viewer"],               // ดูแชท
-  "chat.viewAll": ["admin", "viewer"],                     // เห็นแชททุกห้อง (เซลล์เห็นเฉพาะของตัวเอง + ที่ยังไม่มีคนดูแล)
-  "chat.reply": ["admin", "sales"],                        // ตอบแชท / รับเรื่อง / ติดป้าย
-  "chat.assignOthers": ["admin"],                          // มอบหมายแชทให้คนอื่น
-  "reports.view": ["admin", "sales", "viewer"],            // ดูรายงานยอดขาย (เซลล์เห็นเฉพาะของตัวเอง)
-  "reports.viewAll": ["admin", "viewer"],                  // ดูยอดขายของทุกคน
+  "chat.view": ["admin", "assistant", "sales", "viewer"],               // ดูแชท
+  "chat.viewAll": ["admin", "assistant", "viewer"],                     // เห็นแชททุกห้อง (เซลล์เห็นเฉพาะของตัวเอง + ที่ยังไม่มีคนดูแล)
+  "chat.reply": ["admin", "assistant", "sales"],                        // ตอบแชท / รับเรื่อง / ติดป้าย
+  "chat.assignOthers": ["admin", "assistant"],                          // มอบหมายแชทให้คนอื่น
+  "reports.view": ["admin", "assistant", "sales", "viewer"],            // ดูรายงานยอดขาย (เซลล์เห็นเฉพาะของตัวเอง)
+  "reports.viewAll": ["admin", "assistant", "viewer"],                  // ดูยอดขายของทุกคน
   "staff.manage": ["admin"],                              // เพิ่ม/ลบพนักงาน (แอดมินจัดการแอดมินด้วยกันไม่ได้)
 };
 

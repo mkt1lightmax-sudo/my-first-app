@@ -1,7 +1,8 @@
-export const STAFF_ROLES = ["admin", "sales", "surveyor", "installer", "viewer"] as const;
+export const STAFF_ROLES = ["admin", "assistant", "sales", "surveyor", "installer", "viewer"] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   admin: "แอดมิน",
+  assistant: "ผู้ช่วยแอดมิน",
   sales: "เซลล์",
   surveyor: "ผู้สำรวจ",
   installer: "ช่างติดตั้ง",

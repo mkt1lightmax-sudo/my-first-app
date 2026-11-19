@@ -29,7 +29,7 @@ router.put("/:id/password", requireAuth, requireOwner, async (req, res) => {
   res.json({ ok: true, name: target.name });
 });
 
-const ROLES = ["admin", "sales", "surveyor", "installer", "viewer"];
+const ROLES = ["admin", "assistant", "sales", "surveyor", "installer", "viewer"];
 
 router.get("/", requireAuth, async (req, res) => {
   const result = await query("SELECT id, name, email, role, is_owner FROM staff ORDER BY name");

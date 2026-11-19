@@ -300,3 +300,7 @@ ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_info_updated_by
 
 -- LINE ID ส่วนตัวของลูกค้า (ถ้าลูกค้าให้มา) — ใช้ปุ่ม "เปิดใน LINE" ไปหน้าโปรไฟล์ลูกค้า
 ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS customer_line_id TEXT;
+
+-- เพิ่มตำแหน่ง "ผู้ช่วยแอดมิน" (assistant) — เห็น/ตอบแชททั้งหมดเหมือนแอดมิน แต่เพิ่ม/แก้/ลบพนักงานไม่ได้
+ALTER TABLE staff DROP CONSTRAINT IF EXISTS staff_role_check;
+ALTER TABLE staff ADD CONSTRAINT staff_role_check CHECK (role IN ('admin', 'assistant', 'sales', 'surveyor', 'installer', 'viewer'));
