@@ -287,6 +287,8 @@ CREATE TABLE IF NOT EXISTS chat_media (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_chat_media_conversation ON chat_media(conversation_id);
+-- ชื่อไฟล์ของไฟล์แนบ (PDF) ที่พนักงานส่ง
+ALTER TABLE chat_media ADD COLUMN IF NOT EXISTS file_name TEXT;
 
 -- เวลาที่เปลี่ยนรหัสผ่านล่าสุด — ล็อกอินที่เกิดก่อนเวลานี้ถือว่าหมดอายุ (เตะออกทุกเครื่อง)
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;

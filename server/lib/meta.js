@@ -58,18 +58,20 @@ async function send(token, userId, text) {
   return data.message_id || null;
 }
 
-// ส่งรูปให้ลูกค้า (Messenger / IG) — Meta ดึงรูปจากลิงก์ https สาธารณะเอง
-async function sendImage(token, userId, url) {
+// ส่งรูป / ไฟล์ให้ลูกค้า (Messenger / IG) — Meta ดึงจากลิงก์ https สาธารณะเอง
+async function sendAttachment(token, userId, type, url) {
   const data = await graphFetch(token, "/me/messages", {
     method: "POST",
     body: JSON.stringify({
       recipient: { id: userId },
       messaging_type: "RESPONSE",
-      message: { attachment: { type: "image", payload: { url, is_reusable: false } } },
+      message: { attachment: { type, payload: { url, is_reusable: false } } },
     }),
   });
   return data.message_id || null;
 }
+const sendImage = (token, userId, url) => sendAttachment(token, userId, "image", url);
+const sendFile = (token, userId, url) => sendAttachment(token, userId, "file", url);
 
 // หาว่า token เป็นของเพจไหน
 // วิธีหลัก: ถาม Meta ผ่าน /debug_token ด้วยกุญแจของแอปเรา (META_APP_ID + META_APP_SECRET)
@@ -212,6 +214,7 @@ async function pagesFromOAuthCode({ appId, appSecret, redirectUri, code }) {
 }
 
 module.exports = {
+  sendFile,
   verifySignature,
   getProfile,
   send,

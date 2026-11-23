@@ -24,6 +24,7 @@ export default function ChatThreadPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PreparedImage | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -62,6 +63,14 @@ export default function ChatThreadPage() {
   // แนบรูป: เลือก → ย่อในเครื่อง → ดูตัวอย่าง → ส่ง
   async function pickImage(file: File) {
     setError(null);
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+      if (file.size > MAX_PDF_BYTES) {
+        setError("ไฟล์ PDF ใหญ่เกิน 3MB — ลองบีบอัดไฟล์ก่อนส่ง");
+        return;
+      }
+      setPendingFile(file);
+      return;
+    }
     try {
       setPending(await prepareImage(file));
     } catch (err) {
@@ -90,6 +99,25 @@ export default function ChatThreadPage() {
       setPending(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ส่งรูปไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendFile() {
+    if (!pendingFile || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const data = await blobToBase64(pendingFile);
+      const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/files`, {
+        data,
+        fileName: pendingFile.name,
+      });
+      setMessages((prev) => [...prev, d.message]);
+      setPendingFile(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "ส่งไฟล์ไม่สำเร็จ");
     } finally {
       setSending(false);
     }
@@ -314,7 +342,7 @@ export default function ChatThreadPage() {
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf,.pdf"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -326,8 +354,8 @@ export default function ChatThreadPage() {
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={sending}
-            aria-label="แนบรูป"
-            title="แนบรูป"
+            aria-label="แนบรูปหรือไฟล์ PDF"
+            title="แนบรูปหรือไฟล์ PDF"
             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-gray-500 transition active:bg-gray-100 disabled:opacity-40"
           >
             <ImageIcon className="h-6 w-6" />
@@ -379,6 +407,43 @@ export default function ChatThreadPage() {
 
       {stickerOpen && <StickerPicker sending={sending} onPick={sendSticker} onClose={() => setStickerOpen(false)} />}
 
+      {/* ยืนยันก่อนส่งไฟล์ PDF */}
+      {pendingFile && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => !sending && setPendingFile(null)}>
+          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-3 text-center text-sm text-gray-500">ส่งไฟล์ให้ {conversation?.display_name || "ลูกค้า"}</p>
+            <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gray-50 p-3 ring-1 ring-gray-200">
+              <span className="text-3xl" aria-hidden>📄</span>
+              <div className="min-w-0">
+                <p className="break-all text-sm font-medium text-gray-900">{pendingFile.name}</p>
+                <p className="text-xs text-gray-500">{(pendingFile.size / 1024 / 1024).toFixed(1)} MB</p>
+              </div>
+            </div>
+            {conversation?.channel === "line" && (
+              <p className="mb-3 text-xs text-gray-500">LINE ไม่ให้ OA ส่งไฟล์โดยตรง ลูกค้าจะได้รับเป็นลิงก์สำหรับเปิดไฟล์</p>
+            )}
+            {error && <p className="mb-3 text-center text-sm text-red-600">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingFile(null)}
+                disabled={sending}
+                className="flex-1 rounded-2xl bg-gray-100 py-3 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={sendFile}
+                disabled={sending}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-navy py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                <SendIcon className="h-4 w-4" />
+                {sending ? "กำลังส่ง..." : "ส่งไฟล์"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ดูรูปก่อนส่ง */}
       {pending && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black">
@@ -408,6 +473,8 @@ export default function ChatThreadPage() {
     </div>
   );
 }
+
+const MAX_PDF_BYTES = 3 * 1024 * 1024;
 
 function MessageBubble({ m }: { m: ChatMessage }) {
   const time = new Date(m.created_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });

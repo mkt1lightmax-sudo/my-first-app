@@ -710,6 +710,52 @@ router.post("/conversations/:id/images", requireAuth, requirePermission("chat.re
   res.json({ ok: true, message });
 });
 
+// ส่งไฟล์ PDF ให้ลูกค้า — body: { data: "<base64>", fileName: "ใบเสนอราคา.pdf" }
+// Facebook: ส่งเป็นไฟล์แนบจริง / LINE: OA ส่งไฟล์ไม่ได้ (ข้อจำกัดของ LINE) จึงส่งเป็นข้อความพร้อมลิงก์เปิดไฟล์
+const MAX_FILE_BYTES = 3 * 1024 * 1024;
+router.post("/conversations/:id/files", requireAuth, requirePermission("chat.reply"), async (req, res) => {
+  let fileName = String(req.body?.fileName || "").replace(/[\\/\r\n"]/g, "").trim().slice(0, 120) || "file.pdf";
+  if (!/\.pdf$/i.test(fileName)) fileName += ".pdf";
+  const bytes = Buffer.from(String(req.body?.data || ""), "base64");
+  if (!bytes.length) return res.status(400).json({ ok: false, error: "ไม่พบไฟล์" });
+  if (bytes.length > MAX_FILE_BYTES) return res.status(400).json({ ok: false, error: "ไฟล์ใหญ่เกิน 3MB" });
+  if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-") {
+    return res.status(400).json({ ok: false, error: "รองรับเฉพาะไฟล์ PDF" });
+  }
+
+  const ctx = await loadForSend(req, res);
+  if (!ctx) return;
+  const { convo, account } = ctx;
+
+  const token = crypto.randomBytes(24).toString("hex");
+  await query(
+    "INSERT INTO chat_media (token, conversation_id, content_type, bytes, size, uploaded_by, file_name) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    [token, convo.id, "application/pdf", bytes, bytes.length, req.staff.id, fileName]
+  );
+  const proto = req.get("x-forwarded-proto") || req.protocol;
+  const url = `${proto}://${req.get("x-forwarded-host") || req.get("host")}/api/chat/media/${token}`;
+
+  let externalId = null;
+  try {
+    if (account.channel === "line") await sendLine(account, convo, `📄 ${fileName}\nกดเพื่อเปิดไฟล์: ${url}`);
+    else externalId = await meta.sendFile(account.meta_page_token, convo.external_user_id, url);
+  } catch (err) {
+    console.error("send file error:", err);
+    await query("DELETE FROM chat_media WHERE token = $1", [token]);
+    return res.status(502).json({ ok: false, error: `ส่งไฟล์ไป ${account.name} ไม่สำเร็จ` });
+  }
+
+  const message = await saveOutgoing({
+    convo,
+    staff: req.staff,
+    type: "file",
+    text: `[ไฟล์] ${fileName}`,
+    msgMeta: { mediaToken: token, fileName, fileSize: bytes.length },
+    externalId,
+  });
+  res.json({ ok: true, message });
+});
+
 // ชุดสติกเกอร์ที่ส่งได้ (ให้หน้าเว็บสร้างแผงเลือกสติกเกอร์)
 router.get("/stickers", requireAuth, requirePermission("chat.reply"), (req, res) => {
   res.json({ ok: true, packages: lineStickers.PACKAGES });
@@ -749,9 +795,10 @@ router.post("/conversations/:id/stickers", requireAuth, requirePermission("chat.
 // ปลอดภัยด้วยรหัสสุ่ม 48 ตัวที่เดาไม่ได้
 router.get("/media/:token", async (req, res) => {
   if (!/^[a-f0-9]{48}$/.test(req.params.token)) return res.status(404).end();
-  const m = (await query("SELECT content_type, bytes FROM chat_media WHERE token = $1", [req.params.token])).rows[0];
+  const m = (await query("SELECT content_type, bytes, file_name FROM chat_media WHERE token = $1", [req.params.token])).rows[0];
   if (!m) return res.status(404).end();
   res.set("Content-Type", m.content_type);
+  if (m.file_name) res.set("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(m.file_name)}`);
   res.set("Cache-Control", "public, max-age=31536000, immutable");
   res.send(m.bytes);
 });

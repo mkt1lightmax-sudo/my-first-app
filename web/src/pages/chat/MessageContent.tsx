@@ -71,8 +71,39 @@ export default function MessageContent({ m, out }: { m: ChatMessage; out: boolea
       return <span>{m.text}</span>;
 
     default:
-      return <span>{m.text}</span>;
+      return <LinkifiedText text={m.text} out={out} />;
   }
+}
+
+// ทำให้ลิงก์ในข้อความกดได้ (http/https และ www.)
+const URL_RE = /((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
+function LinkifiedText({ text, out }: { text: string | null; out: boolean }) {
+  if (!text) return null;
+  const parts = text.split(URL_RE);
+  return (
+    <span>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part;
+        // ตัดเครื่องหมายวรรคตอนท้ายลิงก์ออก เช่น "ดูที่ https://x.com)."
+        const trail = part.match(/[).,!?:;]+$/)?.[0] ?? "";
+        const url = trail ? part.slice(0, -trail.length) : part;
+        const href = url.startsWith("www.") ? `https://${url}` : url;
+        return (
+          <span key={i}>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`break-all underline underline-offset-2 ${out ? "text-white" : "text-blue-600"}`}
+            >
+              {url}
+            </a>
+            {trail}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function ChatImage({ src }: { src: string }) {
