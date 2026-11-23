@@ -104,7 +104,7 @@ export default function ChatListPage() {
           <IconButton label="ตัวกรอง" active={activeFilters > 0} onClick={() => setFilterOpen(true)}>
             <FilterIcon className="h-5 w-5" />
             {activeFilters > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-red px-1 text-[10px] font-semibold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-red px-1 text-[12px] font-semibold text-white">
                 {activeFilters}
               </span>
             )}
@@ -145,7 +145,7 @@ export default function ChatListPage() {
               {t.label}
               {t.count !== undefined && (
                 <span
-                  className={`rounded-full px-1.5 text-[11px] ${view === t.value ? "bg-brand-navy text-white" : "bg-gray-300/80 text-gray-600"}`}
+                  className={`rounded-full px-1.5 text-[13px] ${view === t.value ? "bg-brand-navy text-white" : "bg-gray-300/80 text-gray-600"}`}
                 >
                   {t.count}
                 </span>
@@ -200,7 +200,7 @@ function ConversationRow({ c }: { c: Conversation }) {
       <Avatar url={c.picture_url} channel={c.channel} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className={`truncate text-[15px] ${unread ? "font-semibold text-gray-900" : "font-medium text-gray-800"}`}>
+          <span className={`truncate text-[17px] ${unread ? "font-semibold text-gray-900" : "font-medium text-gray-800"}`}>
             {c.display_name || "ลูกค้า"}
           </span>
           {c.followed && <BookmarkIcon filled className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />}
@@ -214,7 +214,7 @@ function ConversationRow({ c }: { c: Conversation }) {
             {c.last_message_preview}
           </p>
           {unread && (
-            <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-brand-red px-1.5 text-[11px] font-semibold text-white">
+            <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-brand-red px-1.5 text-[13px] font-semibold text-white">
               {c.unread_count > 99 ? "99+" : c.unread_count}
             </span>
           )}
@@ -246,7 +246,7 @@ function Pill({ tone, children }: { tone: "navy" | "gray" | "blue" | "amber"; ch
     amber: "bg-amber-50 text-amber-700 ring-amber-200",
   };
   return (
-    <span className={`inline-flex max-w-[11rem] items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tones[tone]}`}>
+    <span className={`inline-flex max-w-[11rem] items-center gap-1 truncate rounded-full px-2 py-0.5 text-[13px] font-medium ring-1 ring-inset ${tones[tone]}`}>
       {children}
     </span>
   );

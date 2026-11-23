@@ -25,6 +25,21 @@ textarea {
   font-family: inherit;
 }
 
+/* มือถือ: ขยายตัวอักษรทั้งแอปให้อ่านง่ายขึ้น (ตัวอักษรไทยเล็กกว่าอังกฤษที่ขนาดเท่ากัน) */
+@media (max-width: 767px) {
+  :root {
+    --text-xs: 0.8125rem; /* 13px (เดิม 12px) */
+    --text-sm: 0.9375rem; /* 15px (เดิม 14px) */
+    --text-base: 1.0625rem; /* 17px (เดิม 16px) */
+  }
+  /* iPhone จะซูมหน้าเองถ้าช่องพิมพ์เล็กกว่า 16px — ตั้งไว้ไม่ต่ำกว่า 16px กันหน้าซูม */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 /* แถบเลื่อนแนวนอน (เช่น แถวแท็ก) ไม่ต้องโชว์ scrollbar */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

@@ -221,7 +221,7 @@ export default function ChatThreadPage() {
         </Link>
         <Avatar url={conversation?.picture_url ?? null} channel={conversation?.channel} size="h-10 w-10" />
         <div className="min-w-0 flex-1 pl-1">
-          <div className="truncate text-[15px] font-semibold text-gray-900">{conversation?.display_name || "ลูกค้า"}</div>
+          <div className="truncate text-[17px] font-semibold text-gray-900">{conversation?.display_name || "ลูกค้า"}</div>
           {conversation && (
             <div className="truncate text-xs text-gray-500">
               {CHANNEL_LABELS[conversation.channel]}
@@ -295,7 +295,7 @@ export default function ChatThreadPage() {
           )}
           {conversation.deal_outcome && (
             <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              className={`rounded-full px-2 py-0.5 text-[13px] font-medium ${
                 conversation.deal_outcome === "won" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-red-50 text-brand-red ring-1 ring-red-200"
               }`}
             >
@@ -346,7 +346,7 @@ export default function ChatThreadPage() {
 
       {hoursLeft !== null && !closed && (
         <p
-          className={`px-4 py-1.5 text-center text-[11px] ${
+          className={`px-4 py-1.5 text-center text-[13px] ${
             hoursLeft <= 0 ? "bg-red-50 text-brand-red" : hoursLeft < 3 ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"
           }`}
         >
@@ -418,7 +418,7 @@ export default function ChatThreadPage() {
             }}
             rows={1}
             placeholder="พิมพ์ข้อความ..."
-            className="max-h-32 min-h-[44px] min-w-0 flex-1 resize-none rounded-3xl bg-gray-100 px-4 py-2.5 text-[15px] focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-navy/30"
+            className="max-h-32 min-h-[44px] min-w-0 flex-1 resize-none rounded-3xl bg-gray-100 px-4 py-2.5 text-[17px] focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-navy/30"
           />
           <button
             type="submit"
@@ -516,7 +516,7 @@ function MessageBubble({ m }: { m: ChatMessage }) {
   if (m.direction === "system") {
     return (
       <div className="my-3 flex justify-center">
-        <span className="rounded-full bg-gray-200/70 px-3 py-1 text-center text-[11px] text-gray-500">{m.text}</span>
+        <span className="rounded-full bg-gray-200/70 px-3 py-1 text-center text-[13px] text-gray-500">{m.text}</span>
       </div>
     );
   }
@@ -525,22 +525,22 @@ function MessageBubble({ m }: { m: ChatMessage }) {
   const bare = isBareMedia(m);
   return (
     <div className={`mb-1.5 flex items-end gap-1.5 ${out ? "justify-end" : "justify-start"}`}>
-      {out && <span className="mb-0.5 text-[10px] text-gray-400">{time}</span>}
+      {out && <span className="mb-0.5 text-[12px] text-gray-400">{time}</span>}
       <div className="max-w-[78%]">
         {bare ? (
           <MessageContent m={m} out={out} />
         ) : (
           <div
-            className={`whitespace-pre-wrap break-words px-3.5 py-2 text-[15px] leading-relaxed ${
+            className={`whitespace-pre-wrap break-words px-3.5 py-2 text-[17px] leading-relaxed ${
               out ? "rounded-2xl rounded-br-md bg-brand-navy text-white" : "rounded-2xl rounded-bl-md bg-white text-gray-900 shadow-sm ring-1 ring-gray-100"
             }`}
           >
             <MessageContent m={m} out={out} />
           </div>
         )}
-        {out && m.staff_name && <div className="mt-0.5 text-right text-[10px] text-gray-400">{m.staff_name}</div>}
+        {out && m.staff_name && <div className="mt-0.5 text-right text-[12px] text-gray-400">{m.staff_name}</div>}
       </div>
-      {!out && <span className="mb-0.5 text-[10px] text-gray-400">{time}</span>}
+      {!out && <span className="mb-0.5 text-[12px] text-gray-400">{time}</span>}
     </div>
   );
 }
@@ -559,7 +559,7 @@ function DateDivider({ iso }: { iso: string }) {
   return (
     <div className="my-4 flex items-center gap-3">
       <span className="h-px flex-1 bg-gray-200" />
-      <span className="text-[11px] font-medium text-gray-400">{label}</span>
+      <span className="text-[13px] font-medium text-gray-400">{label}</span>
       <span className="h-px flex-1 bg-gray-200" />
     </div>
   );
