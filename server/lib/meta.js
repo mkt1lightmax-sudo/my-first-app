@@ -140,7 +140,13 @@ function messageToText(message) {
 function messageMeta(message) {
   const att = message.attachments?.[0];
   if (!att) return null;
-  return { url: att.payload?.url || null, stickerId: att.payload?.sticker_id || null, title: att.payload?.title || null };
+  const coords = att.payload?.coordinates; // ตำแหน่งที่ลูกค้าแชร์ (ถ้า Meta ส่งพิกัดมา)
+  return {
+    url: att.payload?.url || null,
+    stickerId: att.payload?.sticker_id || null,
+    title: att.payload?.title || null,
+    ...(coords ? { latitude: coords.lat, longitude: coords.long } : {}),
+  };
 }
 
 // ให้แอปเรารับข้อความของเพจนี้ (webhook) — คืน null ถ้าสำเร็จ หรือข้อความ error

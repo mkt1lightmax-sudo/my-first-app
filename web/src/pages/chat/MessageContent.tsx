@@ -68,6 +68,20 @@ export default function MessageContent({ m, out }: { m: ChatMessage; out: boolea
           </a>
         );
       }
+      // Facebook บางครั้งส่งมาเป็นลิงก์แผนที่แทนพิกัด
+      if (m.meta?.url) {
+        return (
+          <a
+            href={m.meta.url}
+            target="_blank"
+            rel="noreferrer"
+            className={`block underline-offset-2 hover:underline ${out ? "text-white" : "text-brand-navy"}`}
+          >
+            📍 {m.meta.title || "ตำแหน่งที่ตั้ง"}
+            <span className="mt-0.5 block text-xs opacity-70">เปิดแผนที่ ›</span>
+          </a>
+        );
+      }
       return <span>{m.text}</span>;
 
     default:

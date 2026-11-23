@@ -32,8 +32,10 @@ export default function ChatThreadPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null); // กล่องที่เลื่อนดูข้อความ
+  const contentRef = useRef<HTMLDivElement>(null);
   const lastCount = useRef(0);
+  const stickToBottom = useRef(true); // ผู้ใช้อยู่ล่างสุดอยู่ไหม (ถ้าเลื่อนขึ้นไปอ่านของเก่า จะไม่ดึงลงเอง)
 
   function load() {
     return api
@@ -52,13 +54,37 @@ export default function ChatThreadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // เลื่อนลงล่างสุดเมื่อมีข้อความใหม่
+  // เปลี่ยนห้องแชท → เริ่มใหม่ที่ล่างสุด
   useEffect(() => {
-    if (messages.length !== lastCount.current) {
-      lastCount.current = messages.length;
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    lastCount.current = 0;
+    stickToBottom.current = true;
+  }, [id]);
+
+  // เลื่อนลงล่างสุดเมื่อมีข้อความใหม่ — เลื่อนเฉพาะกล่องข้อความ ไม่ให้ทั้งหน้ากระโดด
+  // เปิดแชทครั้งแรก: ไปล่างสุดทันทีไม่ต้องเลื่อนแบบแอนิเมชัน
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || messages.length === lastCount.current) return;
+    const first = lastCount.current === 0;
+    const mine = messages[messages.length - 1]?.direction === "out";
+    lastCount.current = messages.length;
+    if (first || mine || stickToBottom.current) {
+      stickToBottom.current = true;
+      el.scrollTo({ top: el.scrollHeight, behavior: first ? "auto" : "smooth" });
     }
   }, [messages]);
+
+  // รูปโหลดเสร็จทีหลังทำให้ความสูงเปลี่ยน → ถ้าอยู่ล่างสุดอยู่แล้ว ให้ค้างไว้ล่างสุด
+  useEffect(() => {
+    const el = scrollRef.current;
+    const content = contentRef.current;
+    if (!el || !content) return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, []);
 
   // แนบรูป: เลือก → ย่อในเครื่อง → ดูตัวอย่าง → ส่ง
   async function pickImage(file: File) {
@@ -296,7 +322,15 @@ export default function ChatThreadPage() {
       {conversation?.is_spam && <div className="bg-amber-50 px-4 py-2 text-xs text-amber-800">แชทนี้ถูกทำเครื่องหมายว่าเป็นสแปม</div>}
 
       {/* ข้อความ */}
-      <div className="flex-1 overflow-y-auto px-3 py-4">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        className="flex-1 overflow-y-auto overscroll-contain px-3 py-4"
+      >
+        <div ref={contentRef}>
         {messages.map((m, i) => {
           const prev = messages[i - 1];
           const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
@@ -307,7 +341,7 @@ export default function ChatThreadPage() {
             </div>
           );
         })}
-        <div ref={bottomRef} />
+        </div>
       </div>
 
       {hoursLeft !== null && !closed && (
