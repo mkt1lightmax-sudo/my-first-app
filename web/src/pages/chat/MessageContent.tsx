@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ChatMessage } from "../../lib/chat";
 
 // แสดงเนื้อหาข้อความตามชนิด: ข้อความ / รูป / สติกเกอร์ / วิดีโอ / เสียง / ไฟล์ / แผนที่
@@ -85,8 +85,32 @@ export default function MessageContent({ m, out }: { m: ChatMessage; out: boolea
       return <span>{m.text}</span>;
 
     default:
+      if (m.meta?.emojis?.length && m.text) return <TextWithLineEmoji text={m.text} emojis={m.meta.emojis} out={out} />;
       return <LinkifiedText text={m.text} out={out} />;
   }
+}
+
+// แทนที่ข้อความ "(emoji)" ด้วยรูปอีโมจิจริงของ LINE (ดึงจาก CDN สาธารณะของ LINE)
+type LineEmoji = { index: number; length: number; productId: string; emojiId: string };
+function TextWithLineEmoji({ text, emojis, out }: { text: string; emojis: LineEmoji[]; out: boolean }) {
+  const sorted = [...emojis].sort((a, b) => a.index - b.index);
+  const parts: ReactNode[] = [];
+  let pos = 0;
+  sorted.forEach((e, i) => {
+    if (e.index < pos) return;
+    if (e.index > pos) parts.push(<LinkifiedText key={`t${i}`} text={text.slice(pos, e.index)} out={out} />);
+    parts.push(
+      <img
+        key={`e${i}`}
+        src={`https://stickershop.line-scdn.net/sticonshop/v1/sticon/${encodeURIComponent(e.productId)}/iPhone/${encodeURIComponent(e.emojiId)}.png`}
+        alt={text.slice(e.index, e.index + e.length)}
+        className="inline-block h-6 w-6 align-text-bottom"
+      />
+    );
+    pos = e.index + e.length;
+  });
+  if (pos < text.length) parts.push(<LinkifiedText key="end" text={text.slice(pos)} out={out} />);
+  return <span>{parts}</span>;
 }
 
 // ทำให้ลิงก์ในข้อความกดได้ (http/https และ www.)

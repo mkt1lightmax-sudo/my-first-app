@@ -77,6 +77,11 @@ const TYPE_LABELS = {
 // ข้อมูลเสริมที่ต้องใช้แสดงผล (สติกเกอร์ / ไฟล์ / แผนที่ / รูปจากลิงก์ภายนอก)
 function messageMeta(message) {
   switch (message.type) {
+    case "text":
+      // อีโมจิของ LINE มาเป็นข้อความแทน เช่น "(emoji)" + ตำแหน่งและรหัสรูป — เก็บไว้เพื่อแสดงเป็นรูป
+      return message.emojis?.length
+        ? { emojis: message.emojis.map(({ index, length, productId, emojiId }) => ({ index, length, productId, emojiId })) }
+        : null;
     case "sticker":
       return { stickerId: message.stickerId, packageId: message.packageId, resourceType: message.stickerResourceType };
     case "file":

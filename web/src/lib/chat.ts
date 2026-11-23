@@ -114,6 +114,7 @@ export type ChatMessage = {
     title?: string;
     url?: string | null;
     externalUrl?: string;
+    emojis?: { index: number; length: number; productId: string; emojiId: string }[]; // อีโมจิ LINE ในข้อความ
     mediaToken?: string; // รูปที่พนักงานส่งจากแอปเรา
   } | null;
   created_at: string;
