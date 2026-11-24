@@ -12,7 +12,7 @@ export default function PresentationPage() {
           <Link to="/" className="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 active:bg-gray-100" aria-label="กลับ">
             <ChevronLeftIcon className="h-6 w-6" />
           </Link>
-          <h1 className="font-semibold text-gray-900">ภาพนำเสนอลูกค้า</h1>
+          <h1 className="font-semibold text-gray-900">คำนวณระบบ & ภาพนำเสนอ</h1>
         </div>
         <a href={TOOL_URL} target="_blank" rel="noreferrer" className="rounded-full px-3 py-1.5 text-sm text-brand-navy hover:bg-brand-navy/5">
           เปิดเต็มจอ ↗

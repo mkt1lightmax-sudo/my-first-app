@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon, PanelIcon } from "../components/icons";
+import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon } from "../components/icons";
 import { APPOINTMENT_TYPE_LABELS, formatDateTime, type Appointment } from "../lib/appointments";
 
 const actionCards = [
@@ -16,16 +16,9 @@ const actionCards = [
   {
     to: "/calculator",
     label: "คำนวณระบบ",
-    subtitle: "แนะนำขนาดโซลาร์ที่เหมาะสม",
+    subtitle: "ขนาดระบบ ราคา และภาพนำเสนอ",
     icon: CalculatorIcon,
     tone: "red" as const,
-  },
-  {
-    to: "/presentation",
-    label: "ภาพนำเสนอ",
-    subtitle: "ผลิตไฟรายชั่วโมงให้ลูกค้าดู",
-    icon: PanelIcon,
-    tone: "navy" as const,
   },
   {
     to: "/appointments/new",

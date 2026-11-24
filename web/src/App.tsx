@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useSearchParams } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute, { RequirePermission } from './components/ProtectedRoute'
 import Layout from './components/Layout'
@@ -19,6 +19,12 @@ import ChatReportPage from './pages/chat/ChatReportPage'
 import ChatLayout, { ChatIndex } from './pages/chat/ChatLayout'
 import PresentationPage from './pages/PresentationPage'
 
+// คำนวณระบบ = เครื่องมือภาพนำเสนอ (ตัวเดียว) — ยกเว้นเปิดจากข้อมูลลูกค้า (?surveyId=) ใช้ตัวเดิมที่บันทึกผลเข้าลูกค้าได้ จนกว่าตัวใหม่จะบันทึกได้
+function CalculatorRoute() {
+  const [params] = useSearchParams()
+  return params.get('surveyId') ? <CalculatorPage /> : <PresentationPage />
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -28,7 +34,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/calculator" element={<CalculatorPage />} />
+              <Route path="/calculator" element={<CalculatorRoute />} />
               <Route path="/presentation" element={<PresentationPage />} />
               <Route path="/surveys" element={<SurveyListPage />} />
               <Route path="/surveys/new" element={<RequirePermission permission="customers.edit"><SurveyFormPage /></RequirePermission>} />
