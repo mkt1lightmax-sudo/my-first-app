@@ -213,10 +213,10 @@ export default function ChatThreadPage() {
   const closed = conversation?.status === "closed";
 
   return (
-    <div className="-mx-4 -my-5 flex h-[calc(100dvh-7.5rem)] flex-col bg-gray-50">
+    <div className="-mx-4 -my-5 flex h-[calc(100dvh-7.5rem)] flex-col bg-gray-50 md:-mx-6 md:h-[calc(100dvh-3.5rem)] lg:m-0 lg:h-full">
       {/* หัวแชท */}
       <div className="relative flex items-center gap-2 border-b border-gray-100 bg-white px-2 py-2">
-        <Link to="/chat" className="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 active:bg-gray-100" aria-label="กลับ">
+        <Link to="/chat" className="flex h-10 w-10 items-center lg:hidden justify-center rounded-full text-gray-700 active:bg-gray-100" aria-label="กลับ">
           <ChevronLeftIcon className="h-6 w-6" />
         </Link>
         <Avatar url={conversation?.picture_url ?? null} channel={conversation?.channel} size="h-10 w-10" />

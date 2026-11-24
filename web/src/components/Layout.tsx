@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
@@ -25,6 +25,9 @@ export default function Layout() {
   const chatUnread = useChatUnread(can(staff, "chat.view"));
   const newVersion = useNewVersion();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // หน้าแชทใช้ความกว้างเต็มจอบนคอม (รายชื่อแชท + ห้องแชทคู่กัน) หน้าอื่นจำกัดความกว้างให้อ่านง่าย
+  const wide = pathname === "/chat" || /^\/chat\/\d+/.test(pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -62,7 +65,8 @@ export default function Layout() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-gray-50">
+    // มือถือ: กว้างไม่เกินจอมือถือ + แถบเมนูด้านล่าง / คอม-iPad (md ขึ้นไป): เมนูด้านซ้าย + เนื้อหากว้างขึ้น
+    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-gray-50 md:max-w-none md:pl-56">
       {newVersion && (
         <button
           onClick={() => window.location.reload()}
@@ -72,8 +76,10 @@ export default function Layout() {
           มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต
         </button>
       )}
-      <header className="relative flex items-center justify-between border-b bg-white px-4 py-3">
-        <Logo />
+      <header className="relative flex h-14 flex-shrink-0 items-center justify-between border-b bg-white px-4 md:px-6">
+        <div className="md:invisible">
+          <Logo />
+        </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -179,19 +185,24 @@ export default function Layout() {
         )}
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 py-5 pb-20">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto px-4 py-5 pb-20 md:px-6 md:pb-5">
+        <div className={wide ? "" : "md:mx-auto md:max-w-3xl"}>
+          <Outlet />
+        </div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t bg-white">
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md border-t bg-white md:inset-y-0 md:left-0 md:right-auto md:mx-0 md:w-56 md:max-w-none md:flex-col md:gap-1 md:border-r md:border-t-0 md:px-3">
+        <div className="hidden h-14 items-center px-2 md:mb-3 md:flex">
+          <Logo />
+        </div>
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
             end={tab.end}
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-1 py-2.5 text-xs ${
-                isActive ? "text-brand-navy" : "text-gray-400"
+              `flex flex-1 flex-col items-center gap-1 py-2.5 text-xs md:flex-none md:flex-row md:gap-3 md:rounded-xl md:px-3 md:py-2.5 md:text-base ${
+                isActive ? "text-brand-navy md:bg-brand-navy/5" : "text-gray-400 md:text-gray-600 md:hover:bg-gray-100"
               }`
             }
           >
