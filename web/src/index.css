@@ -9,6 +9,17 @@
   --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* เส้นขอบเริ่มต้นเป็นสีเทาอ่อน (Tailwind v4 ใช้สีตัวอักษร = เส้นดำหนา ดูเชย) — แบบเดียวกับ LINE OA */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
 body {
   margin: 0;
   background: #f3f4f6;
