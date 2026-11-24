@@ -331,7 +331,7 @@ export default function SurveyDetailPage() {
           to={`/calculator?surveyId=${survey.id}`}
           className="rounded bg-brand-red px-4 py-2 text-sm font-medium text-white hover:bg-brand-red/90"
         >
-          เปรียบเทียบ On-Grid / Hybrid
+          คำนวณระบบ & ภาพนำเสนอ
         </Link>
       </div>
 
