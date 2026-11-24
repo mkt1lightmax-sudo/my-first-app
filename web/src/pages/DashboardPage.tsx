@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon } from "../components/icons";
+import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon, PanelIcon } from "../components/icons";
 import { APPOINTMENT_TYPE_LABELS, formatDateTime, type Appointment } from "../lib/appointments";
 
 const actionCards = [
@@ -19,6 +19,13 @@ const actionCards = [
     subtitle: "แนะนำขนาดโซลาร์ที่เหมาะสม",
     icon: CalculatorIcon,
     tone: "red" as const,
+  },
+  {
+    to: "/presentation",
+    label: "ภาพนำเสนอ",
+    subtitle: "ผลิตไฟรายชั่วโมงให้ลูกค้าดู",
+    icon: PanelIcon,
+    tone: "navy" as const,
   },
   {
     to: "/appointments/new",
@@ -58,7 +65,7 @@ export default function DashboardPage() {
       <h1 className="text-2xl font-bold text-brand-navy">สวัสดีค่ะ{staff ? ` ${staff.name}` : ""}</h1>
       <p className="mt-1 text-gray-500">วันนี้ต้องการทำรายการอะไร?</p>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
         {actionCards.map((card) => {
           const tone = toneClasses[card.tone];
           return (

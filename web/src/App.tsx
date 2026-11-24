@@ -17,6 +17,7 @@ import ChatThreadPage from './pages/chat/ChatThreadPage'
 import ChatAccountsPage from './pages/chat/ChatAccountsPage'
 import ChatReportPage from './pages/chat/ChatReportPage'
 import ChatLayout, { ChatIndex } from './pages/chat/ChatLayout'
+import PresentationPage from './pages/PresentationPage'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/calculator" element={<CalculatorPage />} />
+              <Route path="/presentation" element={<PresentationPage />} />
               <Route path="/surveys" element={<SurveyListPage />} />
               <Route path="/surveys/new" element={<RequirePermission permission="customers.edit"><SurveyFormPage /></RequirePermission>} />
               <Route path="/surveys/:id" element={<SurveyDetailPage />} />

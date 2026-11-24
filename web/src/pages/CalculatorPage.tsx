@@ -110,7 +110,12 @@ export default function CalculatorPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-gray-900">คำนวณระบบ Solar</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold text-gray-900">คำนวณระบบ Solar</h1>
+        <Link to="/presentation" className="flex-shrink-0 rounded-full bg-brand-navy/5 px-3 py-1.5 text-sm font-medium text-brand-navy hover:bg-brand-navy/10">
+          ทำภาพนำเสนอ ›
+        </Link>
+      </div>
       <p className="mt-1 text-sm text-gray-500">ข้อมูลที่ใช้คำนวณ</p>
 
       <form onSubmit={handleCalculate} className="mt-4 space-y-4 rounded-2xl border bg-white p-4">
