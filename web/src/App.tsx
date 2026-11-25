@@ -17,6 +17,7 @@ import ChatAccountsPage from './pages/chat/ChatAccountsPage'
 import ChatReportPage from './pages/chat/ChatReportPage'
 import ChatLayout, { ChatIndex } from './pages/chat/ChatLayout'
 import PresentationPage from './pages/PresentationPage'
+import TimeOffPage from './pages/appointments/TimeOffPage'
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
               <Route path="/appointments/new" element={<RequirePermission permission="appointments.create"><AppointmentFormPage /></RequirePermission>} />
               <Route path="/appointments/:id/edit" element={<AppointmentFormPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/time-off" element={<TimeOffPage />} />
               <Route path="/staff" element={<StaffListPage />} />
               <Route path="/staff/new" element={<StaffFormPage />} />
               <Route path="/chat/accounts" element={<ChatAccountsPage />} />

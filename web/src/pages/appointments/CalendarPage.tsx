@@ -9,7 +9,9 @@ import {
   APPOINTMENT_TYPE_STYLES,
   formatTime,
   dateKey,
+  TIME_OFF_LABELS,
   type Appointment,
+  type TimeOff,
 } from "../../lib/appointments";
 import { ChevronRightIcon } from "../../components/icons";
 
@@ -34,6 +36,7 @@ export default function CalendarPage() {
   const [visibleMonth, setVisibleMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(dateKey(today));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [timeOff, setTimeOff] = useState<TimeOff[]>([]);
 
   const monthStart = visibleMonth;
   const monthEnd = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0);
@@ -45,6 +48,10 @@ export default function CalendarPage() {
       .get<{ ok: true; appointments: Appointment[] }>(`/appointments?from=${from}&to=${to}`)
       .then((d) => setAppointments(d.appointments))
       .catch(() => setAppointments([]));
+    api
+      .get<{ ok: true; timeOff: TimeOff[] }>(`/time-off?from=${dateKey(monthStart)}&to=${dateKey(monthEnd)}`)
+      .then((d) => setTimeOff(d.timeOff))
+      .catch(() => setTimeOff([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleMonth]);
 
@@ -81,10 +88,16 @@ export default function CalendarPage() {
 
   const todayKey = dateKey(today);
   const selectedAppointments = appointmentsByDate.get(selectedDate) ?? [];
+  const selectedOff = timeOff.filter((t) => t.off_date === selectedDate);
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">ปฏิทิน</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-gray-900">ปฏิทิน</h1>
+        <Link to="/time-off" className="rounded-full bg-brand-navy/5 px-3 py-1.5 text-sm font-medium text-brand-navy hover:bg-brand-navy/10">
+          แจ้งหยุด
+        </Link>
+      </div>
 
       <div className="rounded-2xl border bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
@@ -150,6 +163,16 @@ export default function CalendarPage() {
         <h2 className="mb-2 font-medium text-gray-900">
           {new Date(selectedDate).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
         </h2>
+
+        {selectedOff.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {selectedOff.map((t) => (
+              <span key={t.id} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                {t.staff_name} หยุด{TIME_OFF_LABELS[t.period]}
+              </span>
+            ))}
+          </div>
+        )}
 
         {selectedAppointments.length === 0 && <p className="text-sm text-gray-400">ไม่มีนัดหมายวันนี้</p>}
 

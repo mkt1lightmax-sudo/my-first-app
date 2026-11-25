@@ -2,8 +2,74 @@ const express = require("express");
 const { query } = require("../db/pool");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { can, requirePermission } = require("../lib/permissions");
+const slots = require("../lib/surveySlots");
 
 const router = express.Router();
+
+// งาน (ที่ไม่ยกเลิก) และวันหยุดของช่างคนนี้ ในช่วงวันที่กำหนด — ใช้เช็กคิวสำรวจ
+async function loadBusy(staffIds, fromDate, toDate, excludeId = null) {
+  if (!staffIds.length) return { appts: [], offs: [] };
+  const appts = await query(
+    `SELECT id, type, customer_name, scheduled_start, scheduled_end, assigned_staff_id
+     FROM appointments
+     WHERE assigned_staff_id = ANY($1) AND status <> 'cancelled'
+       AND scheduled_end > ($2::date - 1)::timestamptz AND scheduled_start < ($3::date + 2)::timestamptz
+       AND ($4::int IS NULL OR id <> $4)`,
+    [staffIds, fromDate, toDate, excludeId]
+  );
+  const offs = await query(
+    `SELECT staff_id, off_date::text AS off_date, period FROM staff_time_off
+     WHERE staff_id = ANY($1) AND off_date BETWEEN $2 AND $3`,
+    [staffIds, fromDate, toDate]
+  );
+  return { appts: appts.rows, offs: offs.rows };
+}
+
+// งานสำรวจ: ต้องเป็นช่องคิวมาตรฐาน และช่างต้องว่าง (ยกเว้นแอดมิน/ผู้ช่วยแอดมินเลือก "เวลาอื่น")
+// คืนข้อความ error หรือ null ถ้าผ่าน
+async function checkSurveyBooking(staff, appt, { override, excludeId }) {
+  if (appt.type !== "site_survey" || appt.status === "cancelled") return null;
+  const allowOverride = Boolean(override) && can(staff, "appointments.override");
+  if (allowOverride) return null;
+  if (!slots.isStandardSlot(appt.scheduled_start, appt.scheduled_end)) {
+    return `งานสำรวจต้องเลือกช่องเวลา ${slots.SLOT_TIMES.join(" / ")} (ครั้งละ ${slots.SURVEY_HOURS} ชม.)`;
+  }
+  if (!appt.assigned_staff_id) return "กรุณาเลือกช่างสำรวจ";
+  const day = slots.bangkokDate(appt.scheduled_start);
+  const staffId = Number(appt.assigned_staff_id);
+  const { appts, offs } = await loadBusy([staffId], day, day, excludeId);
+  const reason = slots.conflictReason(slots.surveyWindow(appt.scheduled_start, appt.scheduled_end), appts, offs);
+  return reason ? `ช่างไม่ว่างช่วงนี้ (${reason}) — เลือกช่องเวลาอื่น` : null;
+}
+
+// ช่องคิวสำรวจของวันนั้น: แต่ละช่องบอกว่าช่างคนไหนว่าง / ไม่ว่างเพราะอะไร
+// ?date=YYYY-MM-DD&exclude=<id งานที่กำลังแก้>
+router.get("/survey-slots", requireAuth, async (req, res) => {
+  const date = String(req.query.date || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ ok: false, error: "date ต้องเป็น YYYY-MM-DD" });
+  const excludeId = req.query.exclude ? Number(req.query.exclude) : null;
+
+  const surveyors = (await query("SELECT id, name FROM staff WHERE role = 'surveyor' ORDER BY name")).rows;
+  const { appts, offs } = await loadBusy(surveyors.map((s) => s.id), date, date, excludeId);
+
+  const result = slots.SLOT_TIMES.map((time) => {
+    const window = slots.slotWindow(date, time);
+    const free = [];
+    const busy = [];
+    for (const s of surveyors) {
+      const reason = slots.conflictReason(
+        window,
+        appts.filter((a) => a.assigned_staff_id === s.id),
+        offs.filter((o) => o.staff_id === s.id)
+      );
+      if (reason) busy.push({ id: s.id, name: s.name, reason });
+      else free.push({ id: s.id, name: s.name });
+    }
+    return { time, start: window.work.start.toISOString(), end: window.work.end.toISOString(), free, busy };
+  });
+
+  res.json({ ok: true, date, surveyors, slots: result });
+});
 
 const EDITABLE_FIELDS = [
   "type",
@@ -48,6 +114,9 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
   if (!type || !customer_name || !scheduled_start || !scheduled_end) {
     return res.status(400).json({ ok: false, error: "type, customer_name, scheduled_start, scheduled_end is required" });
   }
+
+  const slotError = await checkSurveyBooking(req.staff, { ...req.body, status: req.body.status ?? "scheduled" }, { override: req.body.override });
+  if (slotError) return res.status(409).json({ ok: false, error: slotError });
 
   const result = await query(
     `INSERT INTO appointments (
@@ -142,6 +211,18 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if ("assigned_staff_id" in req.body && Number(req.body.assigned_staff_id) !== req.staff.id) {
       return res.status(403).json({ ok: false, error: "คุณย้ายงานไปให้คนอื่นไม่ได้" });
     }
+  }
+
+  // เปลี่ยนเวลา / ช่าง / ประเภท / เปิดงานที่ยกเลิกกลับมา → เช็กคิวสำรวจใหม่
+  // (เทียบเวลาระดับนาที เพราะฟอร์มส่งมาแค่ระดับนาที)
+  const norm = (f, v) => (v == null || v === "" ? "" : f.startsWith("scheduled") ? String(Math.floor(new Date(v).getTime() / 60000)) : String(v));
+  const scheduleChanged = ["type", "scheduled_start", "scheduled_end", "assigned_staff_id", "status"].some(
+    (f) => f in req.body && norm(f, req.body[f]) !== norm(f, existing.rows[0][f])
+  );
+  if (scheduleChanged) {
+    const merged = { ...existing.rows[0], ...req.body };
+    const slotError = await checkSurveyBooking(req.staff, merged, { override: req.body.override, excludeId: existing.rows[0].id });
+    if (slotError) return res.status(409).json({ ok: false, error: slotError });
   }
 
   const setClauses = [];

@@ -55,3 +55,21 @@ export const APPOINTMENT_TYPE_STYLES: Record<AppointmentType, { dot: string; bar
   presentation: { dot: "bg-[#C4A574]", bar: "border-l-[#C4A574]", badge: "bg-[#F7F1E6] text-[#7A6440]" },
   installation: { dot: "bg-[#86A893]", bar: "border-l-[#86A893]", badge: "bg-[#EDF4EF] text-[#4C6B57]" },
 };
+
+// คิวสำรวจ (จาก /appointments/survey-slots)
+export type SurveySlot = {
+  time: string;
+  start: string;
+  end: string;
+  free: { id: number; name: string }[];
+  busy: { id: number; name: string; reason: string }[];
+};
+
+// วันหยุดพนักงาน
+export type TimeOffPeriod = "full" | "morning" | "afternoon";
+export const TIME_OFF_LABELS: Record<TimeOffPeriod, string> = {
+  full: "ทั้งวัน",
+  morning: "ครึ่งเช้า",
+  afternoon: "ครึ่งบ่าย",
+};
+export type TimeOff = { id: number; staff_id: number; staff_name?: string; off_date: string; period: TimeOffPeriod; note: string | null };

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon } from "../components/icons";
-import { APPOINTMENT_TYPE_LABELS, formatDateTime, type Appointment } from "../lib/appointments";
+import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPE_STYLES, formatDateTime, type Appointment } from "../lib/appointments";
 
 const actionCards = [
   {
@@ -82,11 +82,12 @@ export default function DashboardPage() {
         {upcoming && upcoming.length === 0 && <p className="text-sm text-gray-400">ยังไม่มีนัดหมายที่กำลังจะมาถึง</p>}
         <div className="space-y-2">
           {upcoming?.map((a) => (
-            <Link key={a.id} to={`/appointments/${a.id}/edit`} className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50">
+            <Link key={a.id} to={`/appointments/${a.id}/edit`} className={`flex items-center justify-between rounded-lg border border-l-4 p-3 hover:bg-gray-50 ${APPOINTMENT_TYPE_STYLES[a.type].bar}`}>
               <div>
                 <div className="font-medium text-gray-900">{a.customer_name}</div>
-                <div className="mt-0.5 text-xs text-gray-500">
-                  {APPOINTMENT_TYPE_LABELS[a.type]} · {formatDateTime(a.scheduled_start)}
+                <div className="mt-1 text-xs text-gray-500">
+                  <span className={`mr-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${APPOINTMENT_TYPE_STYLES[a.type].badge}`}>{APPOINTMENT_TYPE_LABELS[a.type]}</span>
+                  {formatDateTime(a.scheduled_start)}
                 </div>
               </div>
               <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />

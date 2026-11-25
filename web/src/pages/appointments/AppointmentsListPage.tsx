@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import {
   APPOINTMENT_TYPE_LABELS,
+  APPOINTMENT_TYPE_STYLES,
   APPOINTMENT_STATUS_LABELS,
   APPOINTMENT_STATUS_COLORS,
   formatDateTime,
@@ -43,7 +44,7 @@ export default function AppointmentsListPage() {
           <Link
             key={a.id}
             to={`/appointments/${a.id}/edit`}
-            className="flex items-center justify-between rounded-xl border bg-white p-4 hover:bg-gray-50"
+            className={`flex items-center justify-between rounded-xl border border-l-4 bg-white p-4 hover:bg-gray-50 ${APPOINTMENT_TYPE_STYLES[a.type].bar}`}
           >
             <div>
               <div className="flex items-center gap-2">
@@ -52,8 +53,9 @@ export default function AppointmentsListPage() {
                   {APPOINTMENT_STATUS_LABELS[a.status]}
                 </span>
               </div>
-              <div className="mt-0.5 text-xs text-gray-500">
-                {APPOINTMENT_TYPE_LABELS[a.type]} · {formatDateTime(a.scheduled_start)}
+              <div className="mt-1 text-xs text-gray-500">
+                <span className={`mr-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${APPOINTMENT_TYPE_STYLES[a.type].badge}`}>{APPOINTMENT_TYPE_LABELS[a.type]}</span>
+                {formatDateTime(a.scheduled_start)}
               </div>
               {a.assigned_staff_name && <div className="mt-0.5 text-xs text-brand-navy">มอบหมาย: {a.assigned_staff_name}</div>}
             </div>

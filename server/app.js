@@ -11,6 +11,7 @@ const notificationsRouter = require("./routes/notifications");
 const chatRouter = require("./routes/chat");
 const pushRouter = require("./routes/push");
 const toolsRouter = require("./routes/tools");
+const timeOffRouter = require("./routes/timeOff");
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use("/api/calculate", calculateRouter);
 app.use("/api/appointments", appointmentsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/tools", toolsRouter);
+app.use("/api/time-off", timeOffRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/push", pushRouter);
 
