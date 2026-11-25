@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
 import { useAuth } from "../../context/AuthContext";
 import { can } from "../../lib/permissions";
 import { ROOF_DIRECTION_LABELS, type RoofDirection, type SolarCalcResult } from "../../lib/solar";
@@ -72,6 +73,8 @@ export default function SurveyDetailPage() {
   const canDelete = can(staff, "customers.editAll");
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinMsg, setPinMsg] = useState<string | null>(null);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [calculation, setCalculation] = useState<SolarCalcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +117,18 @@ export default function SurveyDetailPage() {
     }
   }
 
+  // ช่างปักหมุดหน้างาน → บันทึกพิกัด + ลิงก์ Google Maps ทันที
+  async function savePin(lat: number, lng: number) {
+    setPinMsg("กำลังบันทึก...");
+    try {
+      await api.patch(`/surveys/${id}`, { latitude: lat, longitude: lng, map_url: googleMapsUrl(lat, lng) });
+      setPinMsg("บันทึกตำแหน่งแล้ว ✓");
+      load();
+    } catch {
+      setPinMsg("บันทึกตำแหน่งไม่สำเร็จ");
+    }
+  }
+
   async function handleRecalculate() {
     setRecalculating(true);
     try {
@@ -143,7 +158,10 @@ export default function SurveyDetailPage() {
   return (
     <div className="max-w-2xl space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">{survey.customer_name}</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">{survey.customer_name}</h1>
+          {typeof survey.customer_code === "string" && <p className="text-sm text-gray-400">รหัสลูกค้า {survey.customer_code}</p>}
+        </div>
         <Link to="/surveys" className="text-sm text-brand-navy hover:underline">
           ← กลับไปรายการแบบสำรวจ
         </Link>
@@ -161,6 +179,14 @@ export default function SurveyDetailPage() {
           </a>
         )}
         {canEdit && (
+          <button
+            onClick={() => setPinOpen((v) => !v)}
+            className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            {survey.latitude != null ? "ปรับหมุดตำแหน่ง" : "📍 ปักตำแหน่งหน้างาน"}
+          </button>
+        )}
+        {canEdit && (
           <Link to={`/surveys/${id}/edit`} className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             แก้ไขข้อมูล
           </Link>
@@ -175,6 +201,17 @@ export default function SurveyDetailPage() {
           </button>
         )}
       </div>
+
+      {pinOpen && canEdit && (
+        <div className="rounded-lg border bg-white p-4">
+          <MapPinPicker
+            lat={survey.latitude != null ? Number(survey.latitude) : null}
+            lng={survey.longitude != null ? Number(survey.longitude) : null}
+            onChange={savePin}
+          />
+          {pinMsg && <p className="mt-2 text-sm text-gray-600">{pinMsg}</p>}
+        </div>
+      )}
 
       <div className="rounded-lg border bg-white p-4">
         <FormSection title="ข้อมูลลูกค้า">

@@ -12,6 +12,8 @@ const EDITABLE_FIELDS = [
   "customer_phone",
   "customer_address",
   "map_url",
+  "latitude",
+  "longitude",
   // หมวด 1: ประเภทสถานที่
   "site_type",
   "site_type_other",
@@ -111,6 +113,19 @@ async function logHistory(surveyId, staffId, action, changes = null) {
 
 const TRASH_DAYS = 30;
 
+// รหัสลูกค้าถัดไปของเดือนนี้: LM-ปีพ.ศ.2หลัก+เดือน-ลำดับ เช่น LM-6911-004
+async function nextCustomerCode() {
+  const now = new Date();
+  const y = Number(now.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok", year: "numeric" })) + 543;
+  const m = now.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok", month: "2-digit" });
+  const prefix = `LM-${String(y).slice(-2)}${m}`;
+  const r = await query(
+    "SELECT COALESCE(MAX(split_part(customer_code, '-', 3)::int), 0) AS n FROM surveys WHERE customer_code LIKE $1",
+    [`${prefix}-%`]
+  );
+  return `${prefix}-${String(r.rows[0].n + 1).padStart(3, "0")}`;
+}
+
 // ฟอร์มจริงถาม "มีร่มเงาไหม" แบบ 3 ตัวเลือก (none/yes/unsure) แต่เครื่องคำนวณต้องการระดับความเข้ม 4 ระดับ
 // ถ้าเลือก "มี" ใช้ระดับที่กรอกเพิ่ม (shading_level), ถ้า "ไม่แน่ใจ" ใช้ moderate แบบระมัดระวังไว้ก่อน
 function resolveShadingLevel({ shading_presence, shading_level }) {
@@ -170,12 +185,21 @@ router.post("/", requireAuth, requirePermission("customers.create"), async (req,
     params.push(value);
   }
 
+  // ออกรหัสลูกค้า — ถ้าชนกับคนที่บันทึกพร้อมกัน ลองใหม่ด้วยเลขถัดไป
+  columns.push("customer_code");
   const placeholders = columns.map((_, i) => `$${i + 1}`);
-
-  const result = await query(
-    `INSERT INTO surveys (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`,
-    params
-  );
+  let result;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      result = await query(`INSERT INTO surveys (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`, [
+        ...params,
+        await nextCustomerCode(),
+      ]);
+      break;
+    } catch (err) {
+      if (err.code !== "23505" || attempt >= 4) throw err;
+    }
+  }
 
   await logHistory(result.rows[0].id, req.staff.id, "create");
   res.status(201).json({ ok: true, survey: result.rows[0] });
@@ -188,6 +212,10 @@ router.get("/", requireAuth, async (req, res) => {
   if (req.query.status) {
     params.push(req.query.status);
     conditions.push(`status = $${params.length}`);
+  }
+  if (req.query.q) {
+    params.push(`%${String(req.query.q).trim()}%`);
+    conditions.push(`(customer_code ILIKE $${params.length} OR customer_name ILIKE $${params.length} OR customer_phone ILIKE $${params.length})`);
   }
   if (req.query.created_by) {
     params.push(req.query.created_by);
@@ -262,7 +290,8 @@ router.patch("/:id", requireAuth, requirePermission("customers.edit"), async (re
 
   const merged = { ...existing.rows[0], ...req.body };
   // แก้ข้อมูลติดต่อ → ต้องยังครบตามช่องบังคับ
-  if (["customer_name", "customer_phone", "customer_address", "map_url"].some((f) => f in req.body)) {
+  // (ปักหมุดอย่างเดียว ไม่ต้องเช็ก — ช่างหน้างานต้องบันทึกตำแหน่งได้เสมอ)
+  if (["customer_name", "customer_phone", "customer_address"].some((f) => f in req.body)) {
     const invalid = validateRequired(merged);
     if (invalid) return res.status(400).json({ ok: false, error: invalid });
   }

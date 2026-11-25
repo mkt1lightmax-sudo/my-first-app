@@ -30,6 +30,10 @@ export type Appointment = {
   customer_phone: string | null;
   customer_address: string | null;
   map_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  customer_code?: string | null; // รหัสลูกค้า (ถ้างานผูกกับลูกค้า)
+  sales_name?: string | null; // เซลที่ดูแลลูกค้า
   scheduled_start: string;
   scheduled_end: string;
   assigned_staff_id: number | null;
@@ -74,3 +78,18 @@ export const TIME_OFF_LABELS: Record<TimeOffPeriod, string> = {
   afternoon: "ครึ่งบ่าย",
 };
 export type TimeOff = { id: number; staff_id: number; staff_name?: string; off_date: string; period: TimeOffPeriod; note: string | null };
+
+// ชื่อเรียกคนที่ได้รับมอบหมาย ตามประเภทงาน
+export const ASSIGNEE_LABELS: Record<AppointmentType, string> = {
+  site_survey: "ผู้สำรวจ",
+  presentation: "ผู้นำเสนอ",
+  installation: "ช่าง",
+};
+
+// บรรทัด "เซล: X · ผู้สำรวจ: Y" ของงาน
+export function jobPeople(a: Appointment) {
+  const parts: string[] = [];
+  if (a.sales_name) parts.push(`เซล: ${a.sales_name}`);
+  parts.push(`${ASSIGNEE_LABELS[a.type]}: ${a.assigned_staff_name || "ยังไม่ระบุ"}`);
+  return parts.join(" · ");
+}

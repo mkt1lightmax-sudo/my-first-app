@@ -9,6 +9,7 @@ import { can } from "../../lib/permissions";
 type SurveyRow = {
   id: number;
   customer_name: string;
+  customer_code: string | null;
   customer_phone: string | null;
   status: string;
   recommended_kwp: string | null;
@@ -25,13 +26,19 @@ export default function SurveyListPage() {
   const { staff } = useAuth();
   const [surveys, setSurveys] = useState<SurveyRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
+  // ค้นหาด้วยรหัสลูกค้า / ชื่อ / เบอร์โทร (รอพิมพ์เสร็จ 0.3 วิ ค่อยค้น)
   useEffect(() => {
-    api
-      .get<{ ok: true; surveys: SurveyRow[] }>("/surveys")
-      .then((data) => setSurveys(data.surveys))
-      .catch(() => setError("โหลดรายการแบบสำรวจไม่สำเร็จ"));
-  }, []);
+    const t = setTimeout(() => {
+      const q = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "";
+      api
+        .get<{ ok: true; surveys: SurveyRow[] }>(`/surveys${q}`)
+        .then((data) => setSurveys(data.surveys))
+        .catch(() => setError("โหลดรายการแบบสำรวจไม่สำเร็จ"));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   return (
     <div>
@@ -54,6 +61,14 @@ export default function SurveyListPage() {
         </div>
       </div>
 
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="ค้นหารหัสลูกค้า ชื่อ หรือเบอร์โทร"
+        className="mb-3 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+      />
+
       {error && <p className="text-sm text-brand-red">{error}</p>}
 
       {surveys && surveys.length === 0 && <p className="text-gray-500">ยังไม่มีแบบสำรวจ</p>}
@@ -66,7 +81,10 @@ export default function SurveyListPage() {
             className="flex items-center justify-between rounded-xl border bg-white p-4 hover:bg-gray-50"
           >
             <div>
-              <div className="font-medium text-gray-900">{s.customer_name}</div>
+              <div className="font-medium text-gray-900">
+                {s.customer_name}
+                {s.customer_code && <span className="ml-2 text-xs font-normal text-gray-400">{s.customer_code}</span>}
+              </div>
               <div className="mt-0.5 text-xs text-gray-500">
                 {s.customer_phone ?? "ไม่มีเบอร์โทร"} · {STATUS_LABELS[s.status] ?? s.status} ·{" "}
                 {new Date(s.created_at).toLocaleDateString("th-TH")}

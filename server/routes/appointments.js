@@ -78,6 +78,8 @@ const EDITABLE_FIELDS = [
   "customer_phone",
   "customer_address",
   "map_url",
+  "latitude",
+  "longitude",
   "scheduled_start",
   "scheduled_end",
   "assigned_staff_id",
@@ -132,8 +134,8 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
   const result = await query(
     `INSERT INTO appointments (
        type, survey_id, customer_name, customer_phone, customer_address,
-       scheduled_start, scheduled_end, assigned_staff_id, status, notes, created_by, map_url
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       scheduled_start, scheduled_end, assigned_staff_id, status, notes, created_by, map_url, latitude, longitude
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING *`,
     [
       req.body.type,
@@ -148,6 +150,8 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
       req.body.notes ?? null,
       req.staff.id,
       mapUrl,
+      Number.isFinite(Number(req.body.latitude)) && req.body.latitude !== null && req.body.latitude !== undefined ? Number(req.body.latitude) : null,
+      Number.isFinite(Number(req.body.longitude)) && req.body.longitude !== null && req.body.longitude !== undefined ? Number(req.body.longitude) : null,
     ]
   );
 
@@ -163,32 +167,35 @@ router.get("/", requireAuth, async (req, res) => {
   if (req.query.from) {
     params.push(req.query.from);
     // งานหลายวัน: นับงานที่ยังไม่จบในช่วงนี้ด้วย (เริ่มก่อนช่วงแต่จบในช่วง)
-    conditions.push(`scheduled_end >= $${params.length}`);
+    conditions.push(`a.scheduled_end >= $${params.length}`);
   }
   if (req.query.to) {
     params.push(req.query.to);
-    conditions.push(`scheduled_start <= $${params.length}`);
+    conditions.push(`a.scheduled_start <= $${params.length}`);
   }
   if (req.query.type) {
     params.push(req.query.type);
-    conditions.push(`type = $${params.length}`);
+    conditions.push(`a.type = $${params.length}`);
   }
   if (req.query.assigned_staff_id) {
     params.push(req.query.assigned_staff_id);
-    conditions.push(`assigned_staff_id = $${params.length}`);
+    conditions.push(`a.assigned_staff_id = $${params.length}`);
   }
   if (req.query.status) {
     params.push(req.query.status);
-    conditions.push(`status = $${params.length}`);
+    conditions.push(`a.status = $${params.length}`);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const result = await query(
-    `SELECT a.*, s.name AS assigned_staff_name
+    `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
+            sv.customer_code, cs.name AS sales_name
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
+     LEFT JOIN surveys sv ON sv.id = a.survey_id
+     LEFT JOIN staff cs ON cs.id = COALESCE(sv.created_by, a.created_by)
      ${where}
-     ORDER BY scheduled_start ASC`,
+     ORDER BY a.scheduled_start ASC`,
     params
   );
   res.json({ ok: true, appointments: result.rows });
@@ -196,9 +203,12 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   const result = await query(
-    `SELECT a.*, s.name AS assigned_staff_name
+    `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
+            sv.customer_code, cs.name AS sales_name
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
+     LEFT JOIN surveys sv ON sv.id = a.survey_id
+     LEFT JOIN staff cs ON cs.id = COALESCE(sv.created_by, a.created_by)
      WHERE a.id = $1`,
     [req.params.id]
   );

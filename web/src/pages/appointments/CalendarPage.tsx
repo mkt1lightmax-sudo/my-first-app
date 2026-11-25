@@ -7,6 +7,7 @@ import {
   APPOINTMENT_STATUS_COLORS,
   APPOINTMENT_TYPES,
   APPOINTMENT_TYPE_STYLES,
+  jobPeople,
   formatTime,
   dateKey,
   TIME_OFF_LABELS,
@@ -202,7 +203,9 @@ export default function CalendarPage() {
                   <div className="mt-0.5 text-xs text-gray-500">
                     {spanLabel(a) && <span className="font-medium text-gray-600">{spanLabel(a)} · </span>}
                     {a.customer_name}
+                    {a.customer_code && <span className="ml-1 text-gray-400">{a.customer_code}</span>}
                   </div>
+                  <div className="mt-0.5 text-xs text-brand-navy">{jobPeople(a)}</div>
                 </div>
                 <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />
               </Link>

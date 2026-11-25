@@ -50,6 +50,7 @@ import {
   type RequestedPhoto,
 } from "../../lib/survey";
 import FormSection from "../../components/FormSection";
+import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
 import RadioGroup from "../../components/RadioGroup";
 import CheckboxGroup from "../../components/CheckboxGroup";
 import SolarResultCard from "../../components/SolarResultCard";
@@ -84,6 +85,7 @@ export default function SurveyFormPage() {
   const { id } = useParams();
   const isEditing = Boolean(id);
   const [mapUrl, setMapUrl] = useState("");
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; phone?: string; place?: string }>({});
 
   // ข้อมูลลูกค้า
@@ -155,6 +157,7 @@ export default function SurveyFormPage() {
         setCustomerPhone(str(v.customer_phone));
         setCustomerAddress(str(v.customer_address));
         setMapUrl(str(v.map_url));
+        if (v.latitude != null && v.longitude != null) setPin({ lat: Number(v.latitude), lng: Number(v.longitude) });
         setSiteType(v.site_type ?? "");
         setSiteTypeOther(str(v.site_type_other));
         setBusinessType(str(v.business_type));
@@ -239,6 +242,8 @@ export default function SurveyFormPage() {
         customer_phone: customerPhone.replace(/[\s-]/g, ""),
         customer_address: customerAddress || undefined,
         map_url: mapUrl.trim() || undefined,
+        latitude: pin?.lat,
+        longitude: pin?.lng,
 
         site_type: siteType || undefined,
         site_type_other: siteTypeOther || undefined,
@@ -340,6 +345,17 @@ export default function SurveyFormPage() {
               className={`${inputClass} ${fieldErrors.place ? errClass : ""}`}
             />
             {fieldErrors.place && <p className="mt-1 text-xs text-red-600">{fieldErrors.place}</p>}
+          </div>
+          <div>
+            <label className={labelClass}>ปักหมุดตำแหน่ง</label>
+            <MapPinPicker
+              lat={pin?.lat ?? null}
+              lng={pin?.lng ?? null}
+              onChange={(lat, lng) => {
+                setPin({ lat, lng });
+                setMapUrl(googleMapsUrl(lat, lng));
+              }}
+            />
           </div>
         </FormSection>
 

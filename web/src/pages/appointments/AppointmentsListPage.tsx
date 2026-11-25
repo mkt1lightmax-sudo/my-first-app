@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 import {
   APPOINTMENT_TYPE_LABELS,
   APPOINTMENT_TYPE_STYLES,
+  jobPeople,
   APPOINTMENT_STATUS_LABELS,
   APPOINTMENT_STATUS_COLORS,
   formatDateTime,
@@ -49,6 +50,7 @@ export default function AppointmentsListPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-900">{a.customer_name}</span>
+                {a.customer_code && <span className="text-[11px] text-gray-400">{a.customer_code}</span>}
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${APPOINTMENT_STATUS_COLORS[a.status]}`}>
                   {APPOINTMENT_STATUS_LABELS[a.status]}
                 </span>
@@ -57,7 +59,7 @@ export default function AppointmentsListPage() {
                 <span className={`mr-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${APPOINTMENT_TYPE_STYLES[a.type].badge}`}>{APPOINTMENT_TYPE_LABELS[a.type]}</span>
                 {formatDateTime(a.scheduled_start)}
               </div>
-              {a.assigned_staff_name && <div className="mt-0.5 text-xs text-brand-navy">มอบหมาย: {a.assigned_staff_name}</div>}
+              <div className="mt-0.5 text-xs text-brand-navy">{jobPeople(a)}</div>
             </div>
             <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />
           </Link>

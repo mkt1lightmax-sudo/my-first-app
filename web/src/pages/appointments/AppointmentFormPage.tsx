@@ -13,10 +13,19 @@ import {
 
 import { useAuth } from "../../context/AuthContext";
 import SurveySlotPicker from "./SurveySlotPicker";
+import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
 import { can, canEditAppointment } from "../../lib/permissions";
 
 type StaffOption = { id: number; name: string; role: string };
-type SurveyOption = { id: number; customer_name: string; customer_phone: string | null; customer_address: string | null; map_url: string | null };
+type SurveyOption = {
+  id: number;
+  customer_name: string;
+  customer_phone: string | null;
+  customer_address: string | null;
+  map_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
 
 const SLOT_TIMES = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00"];
 
@@ -56,6 +65,7 @@ export default function AppointmentFormPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [mapUrl, setMapUrl] = useState("");
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [assignedStaffId, setAssignedStaffId] = useState("");
@@ -102,6 +112,7 @@ export default function AppointmentFormPage() {
       setCustomerPhone(a.customer_phone ?? "");
       setCustomerAddress(a.customer_address ?? "");
       setMapUrl(a.map_url ?? "");
+      if (a.latitude != null && a.longitude != null) setPin({ lat: Number(a.latitude), lng: Number(a.longitude) });
       setStart(toLocalInputValue(a.scheduled_start));
       setEnd(toLocalInputValue(a.scheduled_end));
       setAssignedStaffId(a.assigned_staff_id ? String(a.assigned_staff_id) : "");
@@ -124,6 +135,7 @@ export default function AppointmentFormPage() {
       if (!customerPhone && survey.customer_phone) setCustomerPhone(survey.customer_phone);
       if (!customerAddress && survey.customer_address) setCustomerAddress(survey.customer_address);
       if (!mapUrl && survey.map_url) setMapUrl(survey.map_url);
+      if (!pin && survey.latitude != null && survey.longitude != null) setPin({ lat: Number(survey.latitude), lng: Number(survey.longitude) });
     }
   }
 
@@ -163,6 +175,8 @@ export default function AppointmentFormPage() {
         customer_phone: customerPhone.replace(/[\s-]/g, "") || undefined,
         customer_address: customerAddress || undefined,
         map_url: mapUrl.trim() || (isEditing ? null : undefined),
+        latitude: pin?.lat,
+        longitude: pin?.lng,
         scheduled_start: new Date(start).toISOString(),
         scheduled_end: new Date(end).toISOString(),
         assigned_staff_id: assignedStaffId ? Number(assignedStaffId) : undefined,
@@ -264,6 +278,16 @@ export default function AppointmentFormPage() {
                 📍 นำทาง
               </a>
             )}
+          </div>
+          <div className="mt-2">
+            <MapPinPicker
+              lat={pin?.lat ?? null}
+              lng={pin?.lng ?? null}
+              onChange={(lat, lng) => {
+                setPin({ lat, lng });
+                setMapUrl(googleMapsUrl(lat, lng));
+              }}
+            />
           </div>
         </div>
 
