@@ -14,7 +14,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import SurveySlotPicker from "./SurveySlotPicker";
 import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
-import { can, canEditAppointment } from "../../lib/permissions";
+import { can, canEditAppointment, isOwner } from "../../lib/permissions";
 
 type StaffOption = { id: number; name: string; role: string };
 type SurveyOption = {
@@ -211,6 +211,25 @@ export default function AppointmentFormPage() {
       setError(err instanceof ApiError ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // ลบนัดหมายถาวร (เฉพาะเจ้าของ) — ถ้าแค่ลูกค้ายกเลิก แนะนำให้เปลี่ยนสถานะเป็น "ยกเลิก" แทน
+  const [deleting, setDeleting] = useState(false);
+  async function handleDelete() {
+    const when = start ? new Date(start).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "";
+    const ok = window.confirm(
+      `ลบนัดหมายนี้ถาวร?\n\n${customerName} · ${APPOINTMENT_TYPE_LABELS[type]}\n${when}\n\nลบแล้วกู้คืนไม่ได้ (ถ้าลูกค้าแค่ยกเลิก ให้เปลี่ยนสถานะเป็น "ยกเลิก" แทน)`
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.delete(`/appointments/${id}`);
+      navigate("/appointments");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "ลบไม่สำเร็จ");
+      setDeleting(false);
     }
   }
 
@@ -452,6 +471,18 @@ export default function AppointmentFormPage() {
         )}
         </fieldset>
       </form>
+
+      {/* ลบนัดหมายถาวร — เฉพาะเจ้าของ */}
+      {isEditing && isOwner(staff) && (
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="mt-3 w-full rounded-lg border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          {deleting ? "กำลังลบ..." : "ลบนัดหมาย"}
+        </button>
+      )}
     </div>
   );
 }

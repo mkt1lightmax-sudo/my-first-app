@@ -1,7 +1,7 @@
 const express = require("express");
 const { query } = require("../db/pool");
-const { requireAuth, requireRole } = require("../middleware/auth");
-const { can, requirePermission } = require("../lib/permissions");
+const { requireAuth } = require("../middleware/auth");
+const { can, requirePermission, requireOwner } = require("../lib/permissions");
 const slots = require("../lib/surveySlots");
 
 const router = express.Router();
@@ -366,7 +366,8 @@ router.patch("/:id", requireAuth, async (req, res) => {
   res.json({ ok: true, appointment: updated });
 });
 
-router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
+// ลบนัดหมายถาวร — เฉพาะเจ้าของระบบ (คนอื่นใช้สถานะ "ยกเลิก" แทน)
+router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
   const result = await query("DELETE FROM appointments WHERE id = $1 RETURNING id", [req.params.id]);
   if (!result.rows[0]) {
     return res.status(404).json({ ok: false, error: "appointment not found" });
