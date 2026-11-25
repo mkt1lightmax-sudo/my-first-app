@@ -111,3 +111,18 @@ export function surveyFeeBadge(a: Appointment): { text: string; className: strin
     ? { text: `ค่าสำรวจ ${amount} · จ่ายแล้ว ✓`, className: "bg-[#EDF4EF] text-[#4C6B57]" }
     : { text: `ค่าสำรวจ ${amount} · ยังไม่จ่าย`, className: "bg-[#FBEFE3] text-[#9A5B23]" };
 }
+
+// ช่วงวันเวลาของงาน: วันเดียว "24 พ.ย. 2569 08:00–10:00" / หลายวัน "24–25 พ.ย. 2569 · 2 วัน (08:00–18:00)"
+export function formatJobRange(a: Pick<Appointment, "scheduled_start" | "scheduled_end">) {
+  const s = new Date(a.scheduled_start);
+  const e = new Date(a.scheduled_end);
+  const day = (d: Date, opts: Intl.DateTimeFormatOptions) => d.toLocaleDateString("th-TH", opts);
+  const times = `${formatTime(a.scheduled_start)}–${formatTime(a.scheduled_end)}`;
+  if (dateKey(s) === dateKey(e)) return `${day(s, { day: "numeric", month: "short", year: "numeric" })} ${times}`;
+  const days = Math.round((new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime() - new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime()) / 86400000) + 1;
+  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
+  const range = sameMonth
+    ? `${s.getDate()}–${day(e, { day: "numeric", month: "short", year: "numeric" })}`
+    : `${day(s, { day: "numeric", month: "short" })} – ${day(e, { day: "numeric", month: "short", year: "numeric" })}`;
+  return `${range} · ${days} วัน (${times})`;
+}

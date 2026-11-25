@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { can } from "../lib/permissions";
 import { api } from "../lib/api";
 import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon } from "../components/icons";
-import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPE_STYLES, formatDateTime, jobPeople, surveyFeeBadge, type Appointment } from "../lib/appointments";
+import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPE_STYLES, formatJobRange, jobPeople, surveyFeeBadge, type Appointment } from "../lib/appointments";
 
 const actionCards = [
   {
@@ -89,7 +89,7 @@ export default function DashboardPage() {
                 <div className="font-medium text-gray-900">{a.customer_name}</div>
                 <div className="mt-1 text-xs text-gray-500">
                   <span className={`mr-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${APPOINTMENT_TYPE_STYLES[a.type].badge}`}>{APPOINTMENT_TYPE_LABELS[a.type]}</span>
-                  {formatDateTime(a.scheduled_start)}
+                  {formatJobRange(a)}
                 </div>
                 <div className="mt-0.5 text-xs text-gray-500">{jobPeople(a)}</div>
                 {surveyFeeBadge(a) && (
