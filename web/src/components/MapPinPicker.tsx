@@ -5,7 +5,8 @@ import "leaflet/dist/leaflet.css";
 // ปักหมุดตำแหน่ง: กด "ใช้ตำแหน่งปัจจุบัน" (GPS มือถือ) หรือแตะ/ลากหมุดบนแผนที่
 // แผนที่ใช้ OpenStreetMap (ฟรี ไม่ต้องใช้คีย์) — ปุ่มนำทางยังเปิด Google Maps ตามปกติ
 
-const THAILAND_CENTER: [number, number] = [13.75, 100.5];
+// กรอบประเทศไทย (เผื่อขอบเล็กน้อย) — เลื่อนออกนอกนี้ไม่ได้
+const THAILAND_BOUNDS = L.latLngBounds([5.2, 96.8], [20.9, 106.2]);
 
 // หมุดสีแบรนด์ (ไม่ใช้ไฟล์รูปของ Leaflet เพราะหาไม่เจอหลัง build)
 const PIN_ICON = L.divIcon({
@@ -36,10 +37,15 @@ export default function MapPinPicker({ lat, lng, onChange, disabled }: Props) {
   // สร้างแผนที่ครั้งเดียว
   useEffect(() => {
     if (!boxRef.current || mapRef.current) return;
-    const map = L.map(boxRef.current, { zoomControl: true, attributionControl: true }).setView(
-      lat != null && lng != null ? [lat, lng] : THAILAND_CENTER,
-      lat != null ? 17 : 5
-    );
+    const map = L.map(boxRef.current, {
+      zoomControl: true,
+      attributionControl: true,
+      maxBounds: THAILAND_BOUNDS,
+      maxBoundsViscosity: 1.0,
+      minZoom: 5,
+    });
+    if (lat != null && lng != null) map.setView([lat, lng], 17);
+    else map.fitBounds(THAILAND_BOUNDS); // เปิดมาเห็นประเทศไทยเต็มกรอบ
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: "© OpenStreetMap",
