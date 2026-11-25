@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../../lib/api";
-import {
+import { type AssigneeCount,
   CHANNEL_COLORS,
   CHANNEL_SHORT,
   EMPTY_FILTERS,
@@ -35,6 +35,7 @@ export default function ChatListPage() {
   const [error, setError] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [accounts, setAccounts] = useState<ChatAccount[]>([]);
+  const [byAssignee, setByAssignee] = useState<AssigneeCount[]>([]);
 
   useEffect(() => {
     api.get<{ ok: true; tags: string[] }>("/chat/tags").then((d) => setTags(d.tags)).catch(() => {});
@@ -57,14 +58,16 @@ export default function ChatListPage() {
     if (filters.followed) p.set("followed", "1");
     if (filters.unassigned) p.set("filter", "unassigned");
     if (filters.spam) p.set("spam", "1");
+    if (filters.assignees.length) p.set("assignees", filters.assignees.join(","));
     if (debounced) p.set("q", debounced);
 
     function load() {
       api
-        .get<{ ok: true; conversations: Conversation[]; counts: ChatCounts }>(`/chat/conversations?${p}`)
+        .get<{ ok: true; conversations: Conversation[]; counts: ChatCounts; byAssignee?: AssigneeCount[] }>(`/chat/conversations?${p}`)
         .then((d) => {
           setConversations(d.conversations);
           setCounts(d.counts);
+          setByAssignee(d.byAssignee ?? []);
           setError(null);
         })
         .catch(() => setError("โหลดรายการแชทไม่สำเร็จ"));
@@ -154,6 +157,33 @@ export default function ChatListPage() {
           ))}
         </div>
 
+        {/* ปุ่มลัดกรองตามผู้ดูแล (เจ้าของ / แอดมิน / ผู้ช่วยแอดมิน) */}
+        {byAssignee.length > 0 && (
+          <div className="no-scrollbar -mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 text-sm">
+            <span className="flex flex-shrink-0 items-center pr-1 text-xs text-gray-400">ผู้ดูแล:</span>
+            <button
+              onClick={() => setFilters({ ...filters, assignees: [] })}
+              className={`flex-shrink-0 rounded-full px-3 py-1 ${
+                filters.assignees.length === 0 ? "bg-brand-navy text-white" : "bg-white text-gray-600 ring-1 ring-gray-200"
+              }`}
+            >
+              ทุกคน
+            </button>
+            {byAssignee.map((a) => {
+              const on = filters.assignees.length === 1 && filters.assignees[0] === a.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setFilters({ ...filters, assignees: on ? [] : [a.id] })}
+                  className={`flex-shrink-0 rounded-full px-3 py-1 ${on ? "bg-brand-navy text-white" : "bg-white text-gray-600 ring-1 ring-gray-200"}`}
+                >
+                  {a.name} <span className={on ? "text-white/70" : "text-gray-400"}>{a.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {filters.spam && (
           <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">กำลังดูแชทที่ทำเครื่องหมายว่าสแปม</div>
         )}
@@ -179,6 +209,7 @@ export default function ChatListPage() {
       {filterOpen && (
         <FilterSheet
           value={filters}
+          assignees={byAssignee}
           tags={tags}
           accounts={accounts}
           canSeeUnassigned={canReply}

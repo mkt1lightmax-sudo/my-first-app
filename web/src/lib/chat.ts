@@ -53,7 +53,11 @@ export type ChatFilters = {
   followed: boolean;
   unassigned: boolean;
   spam: boolean;
+  assignees: number[]; // กรองตามผู้ดูแล (เซล)
 };
+
+// จำนวนแชทที่เปิดอยู่ของแต่ละผู้ดูแล
+export type AssigneeCount = { id: number; name: string; count: number };
 
 export const EMPTY_FILTERS: ChatFilters = {
   read: "",
@@ -64,10 +68,11 @@ export const EMPTY_FILTERS: ChatFilters = {
   followed: false,
   unassigned: false,
   spam: false,
+  assignees: [],
 };
 
 export function countActiveFilters(f: ChatFilters) {
-  return [f.read, f.replied, f.sort === "old", f.tag, f.account, f.followed, f.unassigned, f.spam].filter(Boolean).length;
+  return [f.read, f.replied, f.sort === "old", f.tag, f.account, f.followed, f.unassigned, f.spam, f.assignees.length > 0].filter(Boolean).length;
 }
 
 // ตัวอักษรบนจุดช่องทางที่มุมรูปโปรไฟล์

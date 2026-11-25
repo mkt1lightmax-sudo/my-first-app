@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CHANNEL_LABELS, EMPTY_FILTERS, type ChatAccount, type ChatFilters } from "../../lib/chat";
+import { CHANNEL_LABELS, EMPTY_FILTERS, type AssigneeCount, type ChatAccount, type ChatFilters } from "../../lib/chat";
 
 // แผงตัวกรองที่เลื่อนขึ้นจากด้านล่าง (แบบแอปมือถือ)
 export default function FilterSheet({
@@ -7,6 +7,7 @@ export default function FilterSheet({
   tags,
   accounts,
   canSeeUnassigned,
+  assignees = [],
   onApply,
   onClose,
 }: {
@@ -14,6 +15,7 @@ export default function FilterSheet({
   tags: string[];
   accounts: ChatAccount[];
   canSeeUnassigned: boolean;
+  assignees?: AssigneeCount[]; // แสดงหัวข้อ "ผู้ดูแล" เมื่อมีข้อมูล (เจ้าของ/แอดมิน/ผู้ช่วยแอดมิน)
   onApply: (f: ChatFilters) => void;
   onClose: () => void;
 }) {
@@ -93,6 +95,25 @@ export default function FilterSheet({
                     {CHANNEL_LABELS[a.channel]} · {a.name}
                   </Chip>
                 ))}
+              </div>
+            </Section>
+          )}
+
+          {assignees.length > 0 && (
+            <Section title="ผู้ดูแล (เซล)">
+              <div className="flex flex-wrap gap-2">
+                {assignees.map((a) => {
+                  const on = f.assignees.includes(a.id);
+                  return (
+                    <Chip
+                      key={a.id}
+                      active={on}
+                      onClick={() => set("assignees", on ? f.assignees.filter((x) => x !== a.id) : [...f.assignees, a.id])}
+                    >
+                      {a.name} ({a.count})
+                    </Chip>
+                  );
+                })}
               </div>
             </Section>
           )}

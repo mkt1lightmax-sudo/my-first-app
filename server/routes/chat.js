@@ -291,6 +291,11 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
   if (q.replied === "yes") where.push("c.last_message_direction = 'out'");
   if (q.followed === "1") where.push("f.staff_id IS NOT NULL");
   if (q.account) add("c.account_id = ?", Number(q.account));
+  // ดูตามผู้ดูแล (เซล) — เฉพาะเจ้าของ / แอดมิน / ผู้ช่วยแอดมิน
+  if (q.assignees && can(req.staff, "chat.assignOthers")) {
+    const ids = String(q.assignees).split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    if (ids.length) add("c.assigned_staff_id = ANY(?)", ids);
+  }
   if (q.tag) add("? = ANY(c.tags)", String(q.tag));
   if (q.q && String(q.q).trim()) {
     // ค้นจากชื่อลูกค้า เบอร์โทร ที่อยู่ โน้ต หรือข้อความในแชท
@@ -321,7 +326,20 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
     )
   ).rows[0];
 
-  res.json({ ok: true, conversations: result.rows, counts });
+  // จำนวนแชทที่เปิดอยู่ของแต่ละผู้ดูแล (ใช้กับปุ่มกรองตามเซล)
+  let byAssignee = [];
+  if (can(req.staff, "chat.assignOthers")) {
+    byAssignee = (
+      await query(
+        `SELECT s.id, s.name, COUNT(c.id)::int AS count
+         FROM chat_conversations c JOIN staff s ON s.id = c.assigned_staff_id
+         WHERE c.status = 'open' AND NOT c.is_spam
+         GROUP BY s.id, s.name ORDER BY count DESC, s.name`
+      )
+    ).rows;
+  }
+
+  res.json({ ok: true, conversations: result.rows, counts, byAssignee });
 });
 
 // ---------- การจัดการทิกเก็ต ----------
