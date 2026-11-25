@@ -2,7 +2,9 @@
 //
 // ตำแหน่ง: เจ้าของ (admin + is_owner) / admin / assistant (ผู้ช่วยแอดมิน: เหมือนแอดมิน แต่จัดการพนักงานและลบงานไม่ได้) / sales / surveyor / installer / viewer
 const PERMISSIONS = {
-  "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // เพิ่ม/แก้ข้อมูลลูกค้า
+  "customers.create": ["admin", "assistant", "sales", "surveyor"],      // เพิ่มลูกค้าใหม่
+  "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // แก้ข้อมูลลูกค้า — เฉพาะที่ตัวเองสร้าง/ได้รับมอบหมาย (ดู customers.editAll)
+  "customers.editAll": ["admin"],                                       // แก้ข้อมูลลูกค้าได้ทุกคน + ลบ/กู้คืนจากถังขยะ
   "appointments.create": ["admin", "assistant", "sales"],               // สร้างงานนัดหมาย
   "appointments.editAny": ["admin", "assistant", "sales"],              // แก้งานของทุกคน
   "appointments.editOwn": ["surveyor", "installer"],       // แก้เฉพาะงานที่มอบหมายให้ตัวเอง

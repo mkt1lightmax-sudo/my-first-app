@@ -16,7 +16,7 @@ import SurveySlotPicker from "./SurveySlotPicker";
 import { can, canEditAppointment } from "../../lib/permissions";
 
 type StaffOption = { id: number; name: string; role: string };
-type SurveyOption = { id: number; customer_name: string };
+type SurveyOption = { id: number; customer_name: string; customer_phone: string | null; customer_address: string | null; map_url: string | null };
 
 const SLOT_TIMES = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00"];
 
@@ -56,6 +56,7 @@ export default function AppointmentFormPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [mapUrl, setMapUrl] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [assignedStaffId, setAssignedStaffId] = useState("");
@@ -101,6 +102,7 @@ export default function AppointmentFormPage() {
       setCustomerName(a.customer_name);
       setCustomerPhone(a.customer_phone ?? "");
       setCustomerAddress(a.customer_address ?? "");
+      setMapUrl(a.map_url ?? "");
       setStart(toLocalInputValue(a.scheduled_start));
       setEnd(toLocalInputValue(a.scheduled_end));
       setAssignedStaffId(a.assigned_staff_id ? String(a.assigned_staff_id) : "");
@@ -117,12 +119,28 @@ export default function AppointmentFormPage() {
   function handleSurveySelect(value: string) {
     setSurveyId(value);
     const survey = surveys.find((s) => String(s.id) === value);
-    if (survey && !customerName) setCustomerName(survey.customer_name);
+    // เติมข้อมูลจากลูกค้าที่เลือก (เฉพาะช่องที่ยังว่าง)
+    if (survey) {
+      if (!customerName) setCustomerName(survey.customer_name);
+      if (!customerPhone && survey.customer_phone) setCustomerPhone(survey.customer_phone);
+      if (!customerAddress && survey.customer_address) setCustomerAddress(survey.customer_address);
+      if (!mapUrl && survey.map_url) setMapUrl(survey.map_url);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    // ช่องบังคับ (ตรงกับฝั่งเซิร์ฟเวอร์)
+    const missing: string[] = [];
+    if (!customerName.trim()) missing.push("ชื่อลูกค้า");
+    if (!/^0\d{8,9}$/.test(customerPhone.replace(/[\s-]/g, ""))) missing.push("เบอร์โทร (9–10 หลัก)");
+    if (!customerAddress.trim() && !mapUrl.trim()) missing.push("ที่อยู่ หรือ ลิงก์แผนที่");
+    if (!useSlots && !assignedStaffId) missing.push("ผู้รับผิดชอบ");
+    if (missing.length) {
+      setError(`กรุณากรอก: ${missing.join(", ")}`);
+      return;
+    }
     if (useSlots && (!start || !assignedStaffId)) {
       setError("กรุณาเลือกช่องเวลาและช่างสำรวจ");
       return;
@@ -143,8 +161,9 @@ export default function AppointmentFormPage() {
         type,
         survey_id: surveyId ? Number(surveyId) : undefined,
         customer_name: customerName,
-        customer_phone: customerPhone || undefined,
+        customer_phone: customerPhone.replace(/[\s-]/g, "") || undefined,
         customer_address: customerAddress || undefined,
+        map_url: mapUrl.trim() || (isEditing ? null : undefined),
         scheduled_start: new Date(start).toISOString(),
         scheduled_end: new Date(end).toISOString(),
         assigned_staff_id: assignedStaffId ? Number(assignedStaffId) : undefined,
@@ -217,12 +236,35 @@ export default function AppointmentFormPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>เบอร์โทร</label>
-            <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className={inputClass} />
+            <label className={labelClass}>เบอร์โทร *</label>
+            <input type="tel" inputMode="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="0812345678" className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>ที่อยู่</label>
+            <label className={labelClass}>ที่อยู่ *</label>
             <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className={inputClass} />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>ลิงก์ Google Maps (ใส่แทนที่อยู่ได้)</label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={mapUrl}
+              onChange={(e) => setMapUrl(e.target.value)}
+              placeholder="วางลิงก์จาก Google Maps"
+              className={`${inputClass} min-w-0 flex-1`}
+            />
+            {/^https?:\/\//i.test(mapUrl.trim()) && (
+              <a
+                href={mapUrl.trim()}
+                target="_blank"
+                rel="noreferrer"
+                className="flex flex-shrink-0 items-center rounded-lg bg-[#EDF4EF] px-3 text-sm font-medium text-[#4C6B57]"
+              >
+                📍 นำทาง
+              </a>
+            )}
           </div>
         </div>
 
@@ -280,7 +322,7 @@ export default function AppointmentFormPage() {
 
         {!useSlots && (
         <div>
-          <label className={labelClass}>มอบหมายให้</label>
+          <label className={labelClass}>มอบหมายให้ *</label>
           <select
             value={assignedStaffId}
             onChange={(e) => setAssignedStaffId(e.target.value)}

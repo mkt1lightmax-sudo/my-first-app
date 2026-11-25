@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 import {
   ROOF_DIRECTIONS,
@@ -76,8 +76,15 @@ const SHADING_LEVEL_DETAIL_LABELS: Record<(typeof SHADING_LEVEL_DETAIL_OPTIONS)[
   heavy: "เยอะ",
 };
 
+// ช่องบังคับ (ต้องตรงกับฝั่งเซิร์ฟเวอร์ server/routes/surveys.js)
+const PHONE_RE = /^0\d{8,9}$/;
+
 export default function SurveyFormPage() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditing = Boolean(id);
+  const [mapUrl, setMapUrl] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; phone?: string; place?: string }>({});
 
   // ข้อมูลลูกค้า
   const [customerName, setCustomerName] = useState("");
@@ -136,6 +143,57 @@ export default function SurveyFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // แก้ไข: โหลดข้อมูลเดิมมาใส่ฟอร์ม
+  useEffect(() => {
+    if (!id) return;
+    api
+      .get<{ ok: true; survey: Record<string, any>; canEdit: boolean }>(`/surveys/${id}`)
+      .then(({ survey: v, canEdit }) => {
+        if (!canEdit) setError("แก้ได้เฉพาะลูกค้าที่คุณสร้างหรือได้รับมอบหมาย — ถ้าต้องแก้ ติดต่อแอดมิน");
+        const str = (x: unknown) => (x == null ? "" : String(x));
+        setCustomerName(str(v.customer_name));
+        setCustomerPhone(str(v.customer_phone));
+        setCustomerAddress(str(v.customer_address));
+        setMapUrl(str(v.map_url));
+        setSiteType(v.site_type ?? "");
+        setSiteTypeOther(str(v.site_type_other));
+        setBusinessType(str(v.business_type));
+        setBusinessHours(str(v.business_hours));
+        setBillRange(v.bill_range ?? "");
+        setMonthlyBill(v.monthly_bill_thb != null ? String(Number(v.monthly_bill_thb)) : "");
+        setMonthlyUsage(v.monthly_usage_kwh != null ? String(Number(v.monthly_usage_kwh)) : "");
+        setCanSendBill(v.can_send_bill ?? "");
+        setPeakUsageTime(v.peak_usage_time ?? "");
+        setWeekendUsage(v.weekend_usage ?? "");
+        setMainEquipment(v.main_equipment ?? []);
+        setMainEquipmentOther(str(v.main_equipment_other));
+        setAcCount(str(v.ac_count));
+        setAcSize(str(v.ac_size));
+        setAcSimultaneousCount(str(v.ac_simultaneous_count));
+        setAcUsageStart(str(v.ac_usage_start).slice(0, 5));
+        setAcUsageEnd(str(v.ac_usage_end).slice(0, 5));
+        setAcDailyHours(v.ac_daily_hours != null ? String(Number(v.ac_daily_hours)) : "");
+        setAcUsagePeriod(v.ac_usage_period ?? "");
+        setOtherEquipmentType(str(v.other_equipment_type));
+        setOtherEquipmentCount(str(v.other_equipment_count));
+        setOtherEquipmentUsageTime(str(v.other_equipment_usage_time));
+        setMeterType(v.meter_type ?? "");
+        setCustomerNeeds(v.customer_needs ?? []);
+        setInterestedSystem(v.interested_system ?? "");
+        setBudget(str(v.budget));
+        setInstallTimeline(str(v.install_timeline));
+        setRoofType(v.roof_type ?? "");
+        setRoofTypeOther(str(v.roof_type_other));
+        setShadingPresence(v.shading_presence ?? "");
+        if (v.shading_level && v.shading_level !== "none") setShadingLevel(v.shading_level);
+        setRequestedPhotos(v.requested_photos ?? []);
+        setRoofArea(v.roof_area_sqm != null ? String(Number(v.roof_area_sqm)) : "");
+        setRoofDirection(v.roof_direction ?? "");
+        setNotes(str(v.notes));
+      })
+      .catch(() => setError("โหลดข้อมูลลูกค้าไม่สำเร็จ"));
+  }, [id]);
+
   // preview ผลคำนวณสดๆ (ต้องมีพื้นที่หลังคา + ทิศ + ค่าไฟ/หน่วยไฟ อย่างน้อย)
   useEffect(() => {
     const hasEnoughInput = roofArea && roofDirection && (monthlyBill || monthlyUsage);
@@ -162,12 +220,25 @@ export default function SurveyFormPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    // ตรวจช่องบังคับก่อนส่ง
+    const errs: typeof fieldErrors = {};
+    if (!customerName.trim()) errs.name = "กรุณากรอกชื่อลูกค้า";
+    if (!PHONE_RE.test(customerPhone.replace(/[\s-]/g, ""))) errs.phone = "เบอร์โทร 9–10 หลัก ขึ้นต้นด้วย 0";
+    if (!customerAddress.trim() && !mapUrl.trim()) errs.place = "กรอกที่อยู่ หรือ ลิงก์แผนที่ อย่างน้อย 1 อย่าง";
+    else if (mapUrl.trim() && !/^https?:\/\//i.test(mapUrl.trim())) errs.place = "ลิงก์แผนที่ต้องขึ้นต้นด้วย https://";
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) {
+      setError("กรอกข้อมูลไม่ครบ — ดูช่องที่มีกรอบแดง");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setSubmitting(true);
     try {
-      const data = await api.post<{ ok: true; survey: { id: number } }>("/surveys", {
-        customer_name: customerName,
-        customer_phone: customerPhone || undefined,
+      const body: Record<string, unknown> = {
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone.replace(/[\s-]/g, ""),
         customer_address: customerAddress || undefined,
+        map_url: mapUrl.trim() || undefined,
 
         site_type: siteType || undefined,
         site_type_other: siteTypeOther || undefined,
@@ -210,7 +281,15 @@ export default function SurveyFormPage() {
         roof_direction: roofDirection || undefined,
 
         notes: notes || undefined,
-      });
+      };
+      if (isEditing) {
+        // แก้ไข: ช่องที่ลบออกให้เป็นค่าว่างจริง (ไม่ใช่ข้ามไป)
+        for (const k of Object.keys(body)) if (body[k] === undefined) body[k] = null;
+        await api.patch(`/surveys/${id}`, body);
+        navigate(`/surveys/${id}`);
+        return;
+      }
+      const data = await api.post<{ ok: true; survey: { id: number } }>("/surveys", body);
       navigate(`/surveys/${data.survey.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "บันทึกไม่สำเร็จ");
@@ -221,26 +300,46 @@ export default function SurveyFormPage() {
 
   const inputClass = "w-full rounded border px-3 py-2 text-sm";
   const labelClass = "mb-1 block text-sm text-gray-700";
+  const errClass = "border-red-400 bg-red-50/40";
 
   return (
     <div className="max-w-2xl">
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">กรอกแบบสำรวจ</h1>
+      <h1 className="mb-4 text-xl font-semibold text-gray-900">{isEditing ? "แก้ไขข้อมูลลูกค้า" : "กรอกแบบสำรวจ"}</h1>
+      {error && <p className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      <form onSubmit={handleSubmit} className="mb-6 space-y-5 rounded-lg border bg-white p-4">
+      <form onSubmit={handleSubmit} noValidate className="mb-6 space-y-5 rounded-lg border bg-white p-4">
         <FormSection title="ข้อมูลลูกค้า">
           <div>
             <label className={labelClass}>ชื่อลูกค้า *</label>
-            <input required value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={inputClass} />
+            <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={`${inputClass} ${fieldErrors.name ? errClass : ""}`} />
+            {fieldErrors.name && <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>เบอร์โทร</label>
-              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>ที่อยู่</label>
-              <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className={inputClass} />
-            </div>
+          <div>
+            <label className={labelClass}>เบอร์โทร *</label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              placeholder="0812345678"
+              className={`${inputClass} ${fieldErrors.phone ? errClass : ""}`}
+            />
+            {fieldErrors.phone && <p className="mt-1 text-xs text-red-600">{fieldErrors.phone}</p>}
+          </div>
+          <div>
+            <label className={labelClass}>ที่อยู่ * (หรือใส่ลิงก์แผนที่ด้านล่าง)</label>
+            <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className={`${inputClass} ${fieldErrors.place ? errClass : ""}`} />
+          </div>
+          <div>
+            <label className={labelClass}>ลิงก์ Google Maps</label>
+            <input
+              type="url"
+              value={mapUrl}
+              onChange={(e) => setMapUrl(e.target.value)}
+              placeholder="วางลิงก์จาก Google Maps หรือที่ลูกค้าแชร์มา"
+              className={`${inputClass} ${fieldErrors.place ? errClass : ""}`}
+            />
+            {fieldErrors.place && <p className="mt-1 text-xs text-red-600">{fieldErrors.place}</p>}
           </div>
         </FormSection>
 
@@ -458,7 +557,7 @@ export default function SurveyFormPage() {
           disabled={submitting}
           className="rounded bg-brand-navy px-4 py-2 text-sm font-medium text-white hover:bg-brand-navy-light disabled:opacity-50"
         >
-          {submitting ? "กำลังบันทึก..." : "บันทึกแบบสำรวจ"}
+          {submitting ? "กำลังบันทึก..." : isEditing ? "บันทึกการแก้ไข" : "บันทึกแบบสำรวจ"}
         </button>
       </form>
 

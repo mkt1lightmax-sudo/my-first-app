@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { can } from "../../lib/permissions";
@@ -65,8 +65,13 @@ function listOrDash<T extends string>(v: T[] | null | undefined, labels: Record<
 
 export default function SurveyDetailPage() {
   const { staff } = useAuth();
-  const canEdit = can(staff, "customers.edit");
   const { id } = useParams();
+  const navigate = useNavigate();
+  // แก้ได้ไหม (เซิร์ฟเวอร์บอก: แอดมินแก้ได้ทุกคน, คนอื่นเฉพาะที่ตัวเองสร้าง/ได้รับมอบหมาย)
+  const [canEdit, setCanEdit] = useState(false);
+  const canDelete = can(staff, "customers.editAll");
+  const [history, setHistory] = useState<HistoryRow[] | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [calculation, setCalculation] = useState<SolarCalcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +87,31 @@ export default function SurveyDetailPage() {
 
   function load() {
     api
-      .get<{ ok: true; survey: Survey; calculation: SolarCalcResult | null }>(`/surveys/${id}`)
+      .get<{ ok: true; survey: Survey; calculation: SolarCalcResult | null; canEdit: boolean }>(`/surveys/${id}`)
       .then((data) => {
         setSurvey(data.survey);
+        setCanEdit(data.canEdit);
         setCalculation(data.calculation);
         setBatteryInterest(data.survey.battery_interest ?? "");
         setDocumentsReceived(data.survey.documents_received ?? []);
       })
       .catch(() => setError("โหลดแบบสำรวจไม่สำเร็จ"));
+  }
+
+  async function loadHistory() {
+    const d = await api.get<{ ok: true; history: HistoryRow[] }>(`/surveys/${id}/history`);
+    setHistory(d.history);
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`ย้าย "${survey?.customer_name}" ไปถังขยะ?\n(กู้คืนได้ภายใน 30 วัน ที่เมนู ลูกค้า → ถังขยะ)`)) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/surveys/${id}`);
+      navigate("/surveys");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleRecalculate() {
@@ -125,6 +147,33 @@ export default function SurveyDetailPage() {
         <Link to="/surveys" className="text-sm text-brand-navy hover:underline">
           ← กลับไปรายการแบบสำรวจ
         </Link>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {typeof survey.map_url === "string" && survey.map_url && (
+          <a
+            href={survey.map_url}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg bg-[#EDF4EF] px-4 py-2 text-sm font-medium text-[#4C6B57] hover:bg-[#E1EDE5]"
+          >
+            📍 นำทาง (Google Maps)
+          </a>
+        )}
+        {canEdit && (
+          <Link to={`/surveys/${id}/edit`} className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            แก้ไขข้อมูล
+          </Link>
+        )}
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleting ? "กำลังลบ..." : "ลบ (ย้ายไปถังขยะ)"}
+          </button>
+        )}
       </div>
 
       <div className="rounded-lg border bg-white p-4">
@@ -403,6 +452,84 @@ export default function SurveyDetailPage() {
           )}
         </FormSection>
       </div>
+      {/* ประวัติการแก้ไข */}
+      <div className="rounded-lg border bg-white p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium text-gray-900">ประวัติการแก้ไข</h2>
+          {!history && (
+            <button onClick={loadHistory} className="text-sm text-brand-navy hover:underline">
+              ดูประวัติ
+            </button>
+          )}
+        </div>
+        {history && history.length === 0 && <p className="mt-2 text-sm text-gray-400">ยังไม่มีประวัติ</p>}
+        {history && (
+          <ul className="mt-3 space-y-3">
+            {history.map((h) => (
+              <li key={h.id} className="border-l-2 border-gray-200 pl-3 text-sm">
+                <div className="text-gray-900">
+                  <span className="font-medium">{h.staff_name || "ไม่ทราบ"}</span> {HISTORY_ACTION_LABELS[h.action]}
+                  <span className="ml-2 text-xs text-gray-400">
+                    {new Date(h.created_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+                  </span>
+                </div>
+                {h.changes &&
+                  Object.entries(h.changes).map(([f, c]) => (
+                    <div key={f} className="mt-0.5 text-xs text-gray-500">
+                      {FIELD_LABELS[f] || f}: <span className="text-gray-400 line-through">{showValue(c.from)}</span> →{" "}
+                      <span className="text-gray-700">{showValue(c.to)}</span>
+                    </div>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
+}
+
+type HistoryRow = {
+  id: number;
+  action: "create" | "update" | "delete" | "restore";
+  changes: Record<string, { from: unknown; to: unknown }> | null;
+  created_at: string;
+  staff_name: string | null;
+};
+
+const HISTORY_ACTION_LABELS: Record<HistoryRow["action"], string> = {
+  create: "สร้างข้อมูลลูกค้า",
+  update: "แก้ไข",
+  delete: "ย้ายไปถังขยะ",
+  restore: "กู้คืนจากถังขยะ",
+};
+
+// ชื่อช่องที่อ่านง่าย (ช่องที่ไม่มีในนี้แสดงชื่อเดิม)
+const FIELD_LABELS: Record<string, string> = {
+  customer_name: "ชื่อลูกค้า",
+  customer_phone: "เบอร์โทร",
+  customer_address: "ที่อยู่",
+  map_url: "ลิงก์แผนที่",
+  monthly_bill_thb: "ค่าไฟ/เดือน",
+  monthly_usage_kwh: "หน่วยไฟ/เดือน",
+  roof_area_sqm: "พื้นที่หลังคา",
+  roof_direction: "ทิศหลังคา",
+  roof_type: "ประเภทหลังคา",
+  meter_type: "มิเตอร์",
+  budget: "งบประมาณ",
+  install_timeline: "ช่วงติดตั้ง",
+  interested_system: "ระบบที่สนใจ",
+  recommended_system_type: "ระบบที่แนะนำ",
+  recommended_battery_kwh: "แบตที่แนะนำ (kWh)",
+  battery_interest: "สนใจแบต",
+  documents_received: "เอกสารที่ได้รับ",
+  notes: "หมายเหตุ",
+  status: "สถานะ",
+};
+
+function showValue(v: unknown) {
+  if (v == null || v === "") return "(ว่าง)";
+  if (Array.isArray(v)) return v.join(", ") || "(ว่าง)";
+  const t = String(v);
+  return t.length > 60 ? `${t.slice(0, 60)}…` : t;
 }

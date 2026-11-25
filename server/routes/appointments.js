@@ -77,6 +77,7 @@ const EDITABLE_FIELDS = [
   "customer_name",
   "customer_phone",
   "customer_address",
+  "map_url",
   "scheduled_start",
   "scheduled_end",
   "assigned_staff_id",
@@ -115,14 +116,22 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
     return res.status(400).json({ ok: false, error: "type, customer_name, scheduled_start, scheduled_end is required" });
   }
 
+  // ช่องบังคับ: เบอร์โทร, ที่อยู่หรือลิงก์แผนที่, ผู้รับผิดชอบ
+  const missing = [];
+  if (!/^0\d{8,9}$/.test(String(req.body.customer_phone || "").replace(/[\s-]/g, ""))) missing.push("เบอร์โทร");
+  if (!String(req.body.customer_address || "").trim() && !String(req.body.map_url || "").trim()) missing.push("ที่อยู่ หรือ ลิงก์แผนที่");
+  if (!req.body.assigned_staff_id) missing.push("ผู้รับผิดชอบ");
+  if (missing.length) return res.status(400).json({ ok: false, error: `กรุณากรอก: ${missing.join(", ")}` });
+  const mapUrl = /^https?:\/\//i.test(String(req.body.map_url || "").trim()) ? String(req.body.map_url).trim() : null;
+
   const slotError = await checkSurveyBooking(req.staff, { ...req.body, status: req.body.status ?? "scheduled" }, { override: req.body.override });
   if (slotError) return res.status(409).json({ ok: false, error: slotError });
 
   const result = await query(
     `INSERT INTO appointments (
        type, survey_id, customer_name, customer_phone, customer_address,
-       scheduled_start, scheduled_end, assigned_staff_id, status, notes, created_by
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       scheduled_start, scheduled_end, assigned_staff_id, status, notes, created_by, map_url
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING *`,
     [
       req.body.type,
@@ -136,6 +145,7 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
       req.body.status ?? "scheduled",
       req.body.notes ?? null,
       req.staff.id,
+      mapUrl,
     ]
   );
 
@@ -211,6 +221,11 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if ("assigned_staff_id" in req.body && Number(req.body.assigned_staff_id) !== req.staff.id) {
       return res.status(403).json({ ok: false, error: "คุณย้ายงานไปให้คนอื่นไม่ได้" });
     }
+  }
+
+  if ("map_url" in req.body) {
+    const t = String(req.body.map_url || "").trim();
+    req.body.map_url = /^https?:\/\//i.test(t) ? t : null;
   }
 
   // เปลี่ยนเวลา / ช่าง / ประเภท / เปิดงานที่ยกเลิกกลับมา → เช็กคิวสำรวจใหม่

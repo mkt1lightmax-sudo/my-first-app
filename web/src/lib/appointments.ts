@@ -29,6 +29,7 @@ export type Appointment = {
   customer_name: string;
   customer_phone: string | null;
   customer_address: string | null;
+  map_url?: string | null;
   scheduled_start: string;
   scheduled_end: string;
   assigned_staff_id: number | null;

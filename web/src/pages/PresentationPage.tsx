@@ -25,7 +25,8 @@ export default function PresentationPage() {
   const [params] = useSearchParams();
   const surveyId = params.get("surveyId");
   const { staff } = useAuth();
-  const canSave = Boolean(surveyId) && can(staff, "customers.edit");
+  const [canEditSurvey, setCanEditSurvey] = useState(false);
+  const canSave = Boolean(surveyId) && can(staff, "customers.edit") && canEditSurvey;
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [survey, setSurvey] = useState<SurveyPrefill | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -35,8 +36,11 @@ export default function PresentationPage() {
   useEffect(() => {
     if (!surveyId) return;
     api
-      .get<{ ok: true; survey: SurveyPrefill }>(`/surveys/${surveyId}`)
-      .then((d) => setSurvey(d.survey))
+      .get<{ ok: true; survey: SurveyPrefill; canEdit: boolean }>(`/surveys/${surveyId}`)
+      .then((d) => {
+        setSurvey(d.survey);
+        setCanEditSurvey(d.canEdit);
+      })
       .catch(() => setSurvey(null));
   }, [surveyId]);
 

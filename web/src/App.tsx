@@ -18,6 +18,7 @@ import ChatReportPage from './pages/chat/ChatReportPage'
 import ChatLayout, { ChatIndex } from './pages/chat/ChatLayout'
 import PresentationPage from './pages/PresentationPage'
 import TimeOffPage from './pages/appointments/TimeOffPage'
+import SurveyTrashPage from './pages/surveys/SurveyTrashPage'
 
 function App() {
   return (
@@ -31,8 +32,10 @@ function App() {
               <Route path="/calculator" element={<PresentationPage />} />
               <Route path="/presentation" element={<Navigate to="/calculator" replace />} />
               <Route path="/surveys" element={<SurveyListPage />} />
-              <Route path="/surveys/new" element={<RequirePermission permission="customers.edit"><SurveyFormPage /></RequirePermission>} />
+              <Route path="/surveys/new" element={<RequirePermission permission="customers.create"><SurveyFormPage /></RequirePermission>} />
               <Route path="/surveys/:id" element={<SurveyDetailPage />} />
+              <Route path="/surveys/:id/edit" element={<RequirePermission permission="customers.edit"><SurveyFormPage /></RequirePermission>} />
+              <Route path="/surveys/trash" element={<RequirePermission permission="customers.editAll"><SurveyTrashPage /></RequirePermission>} />
               <Route path="/appointments" element={<AppointmentsListPage />} />
               <Route path="/appointments/new" element={<RequirePermission permission="appointments.create"><AppointmentFormPage /></RequirePermission>} />
               <Route path="/appointments/:id/edit" element={<AppointmentFormPage />} />

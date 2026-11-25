@@ -4,7 +4,9 @@
 type StaffLike = { id: number; role: string; is_owner?: boolean } | null | undefined;
 
 const PERMISSIONS = {
-  "customers.edit": ["admin", "assistant", "sales", "surveyor"],
+  "customers.create": ["admin", "assistant", "sales", "surveyor"],      // เพิ่มลูกค้าใหม่
+  "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // แก้ข้อมูลลูกค้า — เฉพาะที่ตัวเองสร้าง/ได้รับมอบหมาย (ดู customers.editAll)
+  "customers.editAll": ["admin"],                                       // แก้ข้อมูลลูกค้าได้ทุกคน + ลบ/กู้คืนจากถังขยะ
   "appointments.create": ["admin", "assistant", "sales"],
   "appointments.editAny": ["admin", "assistant", "sales"],
   "appointments.editOwn": ["surveyor", "installer"],

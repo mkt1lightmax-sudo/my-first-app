@@ -37,7 +37,13 @@ export default function SurveyListPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">ลูกค้า / แบบสำรวจ</h1>
-        {can(staff, "customers.edit") && (
+        <div className="flex items-center gap-2">
+        {can(staff, "customers.editAll") && (
+          <Link to="/surveys/trash" className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100">
+            ถังขยะ
+          </Link>
+        )}
+        {can(staff, "customers.create") && (
           <Link
             to="/surveys/new"
             className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-medium text-white hover:bg-brand-navy-light"
@@ -45,6 +51,7 @@ export default function SurveyListPage() {
             + สร้างใหม่
           </Link>
         )}
+        </div>
       </div>
 
       {error && <p className="text-sm text-brand-red">{error}</p>}

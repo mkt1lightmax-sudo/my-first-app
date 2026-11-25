@@ -1,8 +1,8 @@
 const express = require("express");
 const { query } = require("../db/pool");
 const { calculateSolarRecommendation } = require("../lib/solarCalculator");
-const { requireAuth, requireRole } = require("../middleware/auth");
-const { requirePermission } = require("../lib/permissions");
+const { requireAuth } = require("../middleware/auth");
+const { can, requirePermission } = require("../lib/permissions");
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ const EDITABLE_FIELDS = [
   "customer_name",
   "customer_phone",
   "customer_address",
+  "map_url",
   // หมวด 1: ประเภทสถานที่
   "site_type",
   "site_type_other",
@@ -61,6 +62,55 @@ const EDITABLE_FIELDS = [
   "status",
 ];
 
+// ช่องบังคับ: ชื่อ, เบอร์โทร (ตัวเลข 9–10 หลัก), ที่อยู่หรือลิงก์แผนที่ — คืนข้อความ error หรือ null
+function validateRequired(s) {
+  const missing = [];
+  if (!String(s.customer_name || "").trim()) missing.push("ชื่อลูกค้า");
+  const phone = String(s.customer_phone || "").replace(/[\s-]/g, "");
+  if (!/^0\d{8,9}$/.test(phone)) missing.push("เบอร์โทร (ตัวเลข 9–10 หลัก ขึ้นต้นด้วย 0)");
+  if (!String(s.customer_address || "").trim() && !String(s.map_url || "").trim()) missing.push("ที่อยู่ หรือ ลิงก์แผนที่");
+  return missing.length ? `กรุณากรอก: ${missing.join(", ")}` : null;
+}
+
+// ลิงก์แผนที่ต้องเป็น http(s) เท่านั้น (กันลิงก์แปลกๆ)
+function cleanMapUrl(v) {
+  const t = String(v || "").trim();
+  if (!t) return null;
+  return /^https?:\/\//i.test(t) ? t : null;
+}
+
+// แก้ได้ไหม: แอดมิน/เจ้าของแก้ได้ทุกคน, คนอื่นแก้ได้เฉพาะลูกค้าที่ตัวเองสร้าง หรือได้รับมอบหมายงานของลูกค้านี้
+async function canEditSurvey(staff, survey) {
+  if (can(staff, "customers.editAll")) return true;
+  if (!can(staff, "customers.edit")) return false;
+  if (survey.created_by === staff.id) return true;
+  const r = await query("SELECT 1 FROM appointments WHERE survey_id = $1 AND assigned_staff_id = $2 LIMIT 1", [survey.id, staff.id]);
+  return r.rows.length > 0;
+}
+const NOT_YOURS = { ok: false, error: "แก้ได้เฉพาะลูกค้าที่คุณสร้างหรือได้รับมอบหมาย — ถ้าต้องแก้ ติดต่อแอดมิน" };
+
+// เทียบค่าเก่า/ใหม่ เพื่อเก็บประวัติเฉพาะช่องที่เปลี่ยนจริง
+const normValue = (v) => (v == null || v === "" || (Array.isArray(v) && v.length === 0) ? null : Array.isArray(v) ? JSON.stringify(v) : String(v));
+function diffFields(before, after) {
+  const changes = {};
+  for (const f of EDITABLE_FIELDS) {
+    if (!(f in after)) continue;
+    if (normValue(before[f]) !== normValue(after[f])) changes[f] = { from: before[f] ?? null, to: after[f] ?? null };
+  }
+  return changes;
+}
+
+async function logHistory(surveyId, staffId, action, changes = null) {
+  await query("INSERT INTO survey_history (survey_id, staff_id, action, changes) VALUES ($1, $2, $3, $4)", [
+    surveyId,
+    staffId,
+    action,
+    changes ? JSON.stringify(changes) : null,
+  ]);
+}
+
+const TRASH_DAYS = 30;
+
 // ฟอร์มจริงถาม "มีร่มเงาไหม" แบบ 3 ตัวเลือก (none/yes/unsure) แต่เครื่องคำนวณต้องการระดับความเข้ม 4 ระดับ
 // ถ้าเลือก "มี" ใช้ระดับที่กรอกเพิ่ม (shading_level), ถ้า "ไม่แน่ใจ" ใช้ moderate แบบระมัดระวังไว้ก่อน
 function resolveShadingLevel({ shading_presence, shading_level }) {
@@ -100,10 +150,10 @@ function tryCalculate(survey) {
   }
 }
 
-router.post("/", requireAuth, requirePermission("customers.edit"), async (req, res) => {
-  if (!req.body.customer_name) {
-    return res.status(400).json({ ok: false, error: "customer_name is required" });
-  }
+router.post("/", requireAuth, requirePermission("customers.create"), async (req, res) => {
+  if ("map_url" in req.body) req.body.map_url = cleanMapUrl(req.body.map_url);
+  const invalid = validateRequired(req.body);
+  if (invalid) return res.status(400).json({ ok: false, error: invalid });
 
   const calc = tryCalculate(req.body);
 
@@ -127,11 +177,12 @@ router.post("/", requireAuth, requirePermission("customers.edit"), async (req, r
     params
   );
 
+  await logHistory(result.rows[0].id, req.staff.id, "create");
   res.status(201).json({ ok: true, survey: result.rows[0] });
 });
 
 router.get("/", requireAuth, async (req, res) => {
-  const conditions = [];
+  const conditions = ["deleted_at IS NULL"];
   const params = [];
 
   if (req.query.status) {
@@ -143,13 +194,45 @@ router.get("/", requireAuth, async (req, res) => {
     conditions.push(`created_by = $${params.length}`);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const where = `WHERE ${conditions.join(" AND ")}`;
   const result = await query(`SELECT * FROM surveys ${where} ORDER BY created_at DESC`, params);
   res.json({ ok: true, surveys: result.rows });
 });
 
+// ถังขยะ (แอดมิน): ลูกค้าที่ถูกลบภายใน 30 วัน — เกิน 30 วันลบถาวรตอนเปิดหน้านี้
+router.get("/trash", requireAuth, requirePermission("customers.editAll"), async (req, res) => {
+  await query(`DELETE FROM surveys WHERE deleted_at < now() - interval '${TRASH_DAYS} days'`);
+  const r = await query(
+    `SELECT s.id, s.customer_name, s.customer_phone, s.customer_address, s.deleted_at, d.name AS deleted_by_name,
+            s.deleted_at + interval '${TRASH_DAYS} days' AS purge_at
+     FROM surveys s LEFT JOIN staff d ON d.id = s.deleted_by
+     WHERE s.deleted_at IS NOT NULL ORDER BY s.deleted_at DESC`
+  );
+  res.json({ ok: true, surveys: r.rows, days: TRASH_DAYS });
+});
+
+router.post("/:id/restore", requireAuth, requirePermission("customers.editAll"), async (req, res) => {
+  const r = await query("UPDATE surveys SET deleted_at = NULL, deleted_by = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING id", [
+    req.params.id,
+  ]);
+  if (!r.rows[0]) return res.status(404).json({ ok: false, error: "ไม่พบในถังขยะ" });
+  await logHistory(r.rows[0].id, req.staff.id, "restore");
+  res.json({ ok: true });
+});
+
+// ประวัติการแก้ไขของลูกค้าคนนี้
+router.get("/:id/history", requireAuth, async (req, res) => {
+  const r = await query(
+    `SELECT h.id, h.action, h.changes, h.created_at, st.name AS staff_name
+     FROM survey_history h LEFT JOIN staff st ON st.id = h.staff_id
+     WHERE h.survey_id = $1 ORDER BY h.created_at DESC LIMIT 100`,
+    [req.params.id]
+  );
+  res.json({ ok: true, history: r.rows });
+});
+
 router.get("/:id", requireAuth, async (req, res) => {
-  const result = await query("SELECT * FROM surveys WHERE id = $1", [req.params.id]);
+  const result = await query("SELECT * FROM surveys WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
   const survey = result.rows[0];
   if (!survey) {
     return res.status(404).json({ ok: false, error: "survey not found" });
@@ -166,16 +249,24 @@ router.get("/:id", requireAuth, async (req, res) => {
     calculation = null;
   }
 
-  res.json({ ok: true, survey, calculation });
+  res.json({ ok: true, survey, calculation, canEdit: await canEditSurvey(req.staff, survey) });
 });
 
 router.patch("/:id", requireAuth, requirePermission("customers.edit"), async (req, res) => {
-  const existing = await query("SELECT * FROM surveys WHERE id = $1", [req.params.id]);
+  const existing = await query("SELECT * FROM surveys WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
   if (!existing.rows[0]) {
     return res.status(404).json({ ok: false, error: "survey not found" });
   }
+  if (!(await canEditSurvey(req.staff, existing.rows[0]))) return res.status(403).json(NOT_YOURS);
+  if ("map_url" in req.body) req.body.map_url = cleanMapUrl(req.body.map_url);
 
   const merged = { ...existing.rows[0], ...req.body };
+  // แก้ข้อมูลติดต่อ → ต้องยังครบตามช่องบังคับ
+  if (["customer_name", "customer_phone", "customer_address", "map_url"].some((f) => f in req.body)) {
+    const invalid = validateRequired(merged);
+    if (invalid) return res.status(400).json({ ok: false, error: invalid });
+  }
+  const changes = diffFields(existing.rows[0], req.body);
   const calc = tryCalculate(merged);
 
   const setClauses = [];
@@ -199,14 +290,16 @@ router.patch("/:id", requireAuth, requirePermission("customers.edit"), async (re
     params
   );
 
+  if (Object.keys(changes).length) await logHistory(existing.rows[0].id, req.staff.id, "update", changes);
   res.json({ ok: true, survey: result.rows[0] });
 });
 
 router.post("/:id/calculate", requireAuth, requirePermission("customers.edit"), async (req, res) => {
-  const existing = await query("SELECT * FROM surveys WHERE id = $1", [req.params.id]);
+  const existing = await query("SELECT * FROM surveys WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
   if (!existing.rows[0]) {
     return res.status(404).json({ ok: false, error: "survey not found" });
   }
+  if (!(await canEditSurvey(req.staff, existing.rows[0]))) return res.status(403).json(NOT_YOURS);
 
   try {
     const result = calculateSolarRecommendation({
@@ -233,11 +326,16 @@ router.post("/:id/calculate", requireAuth, requirePermission("customers.edit"), 
   }
 });
 
-router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
-  const result = await query("DELETE FROM surveys WHERE id = $1 RETURNING id", [req.params.id]);
+// ลบ = ย้ายไปถังขยะ (กู้คืนได้ 30 วัน) — เฉพาะเจ้าของ/แอดมิน
+router.delete("/:id", requireAuth, requirePermission("customers.editAll"), async (req, res) => {
+  const result = await query(
+    "UPDATE surveys SET deleted_at = now(), deleted_by = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id",
+    [req.params.id, req.staff.id]
+  );
   if (!result.rows[0]) {
     return res.status(404).json({ ok: false, error: "survey not found" });
   }
+  await logHistory(result.rows[0].id, req.staff.id, "delete");
   res.json({ ok: true });
 });
 
