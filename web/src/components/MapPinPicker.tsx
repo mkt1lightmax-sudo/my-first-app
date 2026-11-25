@@ -44,8 +44,11 @@ export default function MapPinPicker({ lat, lng, onChange, disabled }: Props) {
       maxBoundsViscosity: 1.0,
       minZoom: 5,
     });
+    // ซูมออกได้สุดแค่ "ประเทศไทยเต็มกรอบ" (จอกว้างจะไม่เห็นประเทศเพื่อนบ้านด้านข้าง)
+    const fillZoom = Math.max(5, map.getBoundsZoom(THAILAND_BOUNDS, true));
+    map.setMinZoom(fillZoom);
     if (lat != null && lng != null) map.setView([lat, lng], 17);
-    else map.fitBounds(THAILAND_BOUNDS); // เปิดมาเห็นประเทศไทยเต็มกรอบ
+    else map.setView([15.0, 101.0], fillZoom); // เปิดมาที่ภาคกลาง ลากขึ้น/ลงดูภาคเหนือ/ใต้ได้
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: "© OpenStreetMap",
@@ -118,7 +121,7 @@ export default function MapPinPicker({ lat, lng, onChange, disabled }: Props) {
         </button>
       )}
       {gpsError && <p className="text-xs text-red-600">{gpsError}</p>}
-      <div ref={boxRef} className="relative z-0 h-56 w-full overflow-hidden rounded-lg border" />
+      <div ref={boxRef} className="relative z-0 h-56 w-full overflow-hidden rounded-lg border md:h-72" />
       <p className="text-xs text-gray-400">
         {lat != null && lng != null
           ? `ปักไว้ที่ ${lat.toFixed(5)}, ${lng.toFixed(5)}${disabled ? "" : " · ลากหมุดหรือแตะแผนที่เพื่อปรับ"}`

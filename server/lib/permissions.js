@@ -9,7 +9,7 @@ const PERMISSIONS = {
   "customers.editAll": ["admin"],                                       // แก้ข้อมูลลูกค้าได้ทุกคน + ลบ/กู้คืนจากถังขยะ
   "appointments.create": ["admin", "assistant"],                         // สร้างงานนัดหมาย — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.editAny": ["admin", "assistant"],                        // แก้งานของทุกคน — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
-  "appointments.editOwn": ["surveyor", "installer"],       // แก้เฉพาะงานที่มอบหมายให้ตัวเอง
+  "appointments.editOwn": [],                                            // แก้เฉพาะงานที่มอบหมายให้ตัวเอง — ปิดไว้ (2026-11-25): นอกจากเจ้าของ/แอดมิน/ผู้ช่วยแอดมิน ให้ดูได้อย่างเดียว (เดิม surveyor, installer)
   "chat.view": ["admin", "assistant", "sales", "viewer"],               // ดูแชท
   "chat.viewAll": ["admin", "assistant", "viewer"],                     // เห็นแชททุกห้อง (เซลล์เห็นเฉพาะของตัวเอง + ที่ยังไม่มีคนดูแล)
   "chat.reply": ["admin", "assistant", "sales"],                        // ตอบแชท / รับเรื่อง / ติดป้าย
