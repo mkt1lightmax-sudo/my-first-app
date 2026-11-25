@@ -22,10 +22,11 @@ type Props = {
   lat: number | null;
   lng: number | null;
   onChange: (lat: number, lng: number) => void;
-  disabled?: boolean;
+  disabled?: boolean; // ดูอย่างเดียว: ลาก/แตะปักหมุดไม่ได้ (ซูมได้)
+  autoLocate?: boolean; // เปิดมาแล้วจับ GPS ให้ทันที (ตอนอัปเดตตำแหน่งหน้างาน)
 };
 
-export default function MapPinPicker({ lat, lng, onChange, disabled }: Props) {
+export default function MapPinPicker({ lat, lng, onChange, disabled, autoLocate }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -82,6 +83,12 @@ export default function MapPinPicker({ lat, lng, onChange, disabled }: Props) {
       if (!map.getBounds().contains([lat, lng])) map.panTo([lat, lng]);
     }
   }, [lat, lng, disabled]);
+
+  // อัปเดตตำแหน่งหน้างาน: จับ GPS ให้ทันทีที่เปิด
+  useEffect(() => {
+    if (autoLocate && !disabled) useMyLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function useMyLocation() {
     if (!navigator.geolocation) {

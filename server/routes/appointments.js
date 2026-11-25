@@ -3,6 +3,7 @@ const { query } = require("../db/pool");
 const { requireAuth } = require("../middleware/auth");
 const { can, requirePermission, requireOwner } = require("../lib/permissions");
 const slots = require("../lib/surveySlots");
+const location = require("../lib/location");
 
 const router = express.Router();
 
@@ -257,7 +258,8 @@ router.get("/", requireAuth, async (req, res) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const result = await query(
     `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
-            sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name
+            sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name,
+            sv.latitude AS survey_latitude, sv.longitude AS survey_longitude, sv.map_url AS survey_map_url
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
@@ -273,7 +275,8 @@ router.get("/", requireAuth, async (req, res) => {
 router.get("/:id", requireAuth, async (req, res) => {
   const result = await query(
     `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
-            sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name
+            sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name,
+            sv.latitude AS survey_latitude, sv.longitude AS survey_longitude, sv.map_url AS survey_map_url
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
@@ -285,7 +288,27 @@ router.get("/:id", requireAuth, async (req, res) => {
   if (!result.rows[0]) {
     return res.status(404).json({ ok: false, error: "appointment not found" });
   }
-  res.json({ ok: true, appointment: result.rows[0] });
+  const a = result.rows[0];
+  const canUpdateLocation = a.survey_id
+    ? await location.canUpdateSurveyLocation(req.staff, a.survey_id)
+    : can(req.staff, "location.update") || a.assigned_staff_id === req.staff.id;
+  res.json({ ok: true, appointment: a, canUpdateLocation });
+});
+
+// อัปเดตตำแหน่งหน้างาน — ผูกกับลูกค้า = อัปเดตที่ลูกค้า (ทุกนัดของลูกค้าใช้ตำแหน่งเดียวกัน)
+router.put("/:id/location", requireAuth, async (req, res) => {
+  const a = (await query("SELECT id, survey_id, assigned_staff_id FROM appointments WHERE id = $1", [req.params.id])).rows[0];
+  if (!a) return res.status(404).json({ ok: false, error: "appointment not found" });
+  const allowed = a.survey_id
+    ? await location.canUpdateSurveyLocation(req.staff, a.survey_id)
+    : can(req.staff, "location.update") || a.assigned_staff_id === req.staff.id;
+  if (!allowed) return res.status(403).json({ ok: false, error: "อัปเดตตำแหน่งได้เฉพาะแอดมิน หรือช่างที่ได้รับมอบหมายงานนี้" });
+  const p = location.parseLatLng(req.body);
+  if (!p) return res.status(400).json({ ok: false, error: "พิกัดไม่ถูกต้อง" });
+  const url = location.googleMapsUrl(p.lat, p.lng);
+  await query("UPDATE appointments SET latitude = $2, longitude = $3, map_url = $4, updated_at = now() WHERE id = $1", [a.id, p.lat, p.lng, url]);
+  if (a.survey_id) await location.saveSurveyLocation(a.survey_id, req.staff.id, p);
+  res.json({ ok: true, location: { latitude: p.lat, longitude: p.lng, map_url: url } });
 });
 
 router.patch("/:id", requireAuth, async (req, res) => {

@@ -1,6 +1,7 @@
 const express = require("express");
 const { query } = require("../db/pool");
 const { calculateSolarRecommendation } = require("../lib/solarCalculator");
+const location = require("../lib/location");
 const { requireAuth } = require("../middleware/auth");
 const { can, requirePermission } = require("../lib/permissions");
 
@@ -273,6 +274,18 @@ router.post("/:id/restore", requireAuth, requirePermission("customers.editAll"),
   res.json({ ok: true });
 });
 
+// อัปเดตตำแหน่งหน้างาน (ปักหมุด) — เจ้าของ/แอดมิน/ผู้ช่วยแอดมิน หรือช่าง/ผู้สำรวจที่ได้รับมอบหมายงานของลูกค้านี้
+router.put("/:id/location", requireAuth, async (req, res) => {
+  const sv = (await query("SELECT id FROM surveys WHERE id = $1 AND deleted_at IS NULL", [req.params.id])).rows[0];
+  if (!sv) return res.status(404).json({ ok: false, error: "survey not found" });
+  if (!(await location.canUpdateSurveyLocation(req.staff, sv.id))) {
+    return res.status(403).json({ ok: false, error: "อัปเดตตำแหน่งได้เฉพาะแอดมิน หรือช่างที่ได้รับมอบหมายงานของลูกค้านี้" });
+  }
+  const p = location.parseLatLng(req.body);
+  if (!p) return res.status(400).json({ ok: false, error: "พิกัดไม่ถูกต้อง" });
+  res.json({ ok: true, location: await location.saveSurveyLocation(sv.id, req.staff.id, p) });
+});
+
 // ประวัติการแก้ไขของลูกค้าคนนี้
 router.get("/:id/history", requireAuth, async (req, res) => {
   const r = await query(
@@ -322,7 +335,13 @@ router.get("/:id", requireAuth, async (req, res) => {
     calculation = null;
   }
 
-  res.json({ ok: true, survey, calculation, canEdit: await canEditSurvey(req.staff, survey) });
+  res.json({
+    ok: true,
+    survey,
+    calculation,
+    canEdit: await canEditSurvey(req.staff, survey),
+    canUpdateLocation: await location.canUpdateSurveyLocation(req.staff, survey.id),
+  });
 });
 
 router.patch("/:id", requireAuth, requirePermission("customers.edit"), async (req, res) => {

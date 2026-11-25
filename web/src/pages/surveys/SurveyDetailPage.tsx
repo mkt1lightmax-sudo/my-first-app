@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
+import LocationCard from "../../components/LocationCard";
 import { CUSTOMER_STATUSES, CUSTOMER_STATUS_LABELS, CUSTOMER_STATUS_STYLES, type CustomerStatus } from "../../lib/survey";
 import { useAuth } from "../../context/AuthContext";
 import { can } from "../../lib/permissions";
@@ -74,8 +74,7 @@ export default function SurveyDetailPage() {
   const canDelete = can(staff, "customers.editAll");
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [pinOpen, setPinOpen] = useState(false);
-  const [pinMsg, setPinMsg] = useState<string | null>(null);
+  const [canUpdateLocation, setCanUpdateLocation] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   // เปลี่ยนเซลผู้ดูแล (แอดมิน / ผู้ช่วยแอดมิน)
   const canAssignSales = can(staff, "customers.assignSales");
@@ -111,10 +110,11 @@ export default function SurveyDetailPage() {
 
   function load() {
     api
-      .get<{ ok: true; survey: Survey; calculation: SolarCalcResult | null; canEdit: boolean }>(`/surveys/${id}`)
+      .get<{ ok: true; survey: Survey; calculation: SolarCalcResult | null; canEdit: boolean; canUpdateLocation: boolean }>(`/surveys/${id}`)
       .then((data) => {
         setSurvey(data.survey);
         setCanEdit(data.canEdit);
+        setCanUpdateLocation(data.canUpdateLocation);
         setCalculation(data.calculation);
         setBatteryInterest(data.survey.battery_interest ?? "");
         setDocumentsReceived(data.survey.documents_received ?? []);
@@ -138,16 +138,11 @@ export default function SurveyDetailPage() {
     }
   }
 
-  // ช่างปักหมุดหน้างาน → บันทึกพิกัด + ลิงก์ Google Maps ทันที
-  async function savePin(lat: number, lng: number) {
-    setPinMsg("กำลังบันทึก...");
-    try {
-      await api.patch(`/surveys/${id}`, { latitude: lat, longitude: lng, map_url: googleMapsUrl(lat, lng) });
-      setPinMsg("บันทึกตำแหน่งแล้ว ✓");
-      load();
-    } catch {
-      setPinMsg("บันทึกตำแหน่งไม่สำเร็จ");
-    }
+  // อัปเดตตำแหน่งหน้างาน (บันทึกประวัติด้วย)
+  async function saveLocation(lat: number, lng: number) {
+    await api.put(`/surveys/${id}/location`, { latitude: lat, longitude: lng });
+    load();
+    setHistory(null);
   }
 
   // เปลี่ยนสถานะลูกค้า (บันทึกในประวัติด้วย)
@@ -248,24 +243,6 @@ export default function SurveyDetailPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {typeof survey.map_url === "string" && survey.map_url && (
-          <a
-            href={survey.map_url}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg bg-[#EDF4EF] px-4 py-2 text-sm font-medium text-[#4C6B57] hover:bg-[#E1EDE5]"
-          >
-            📍 นำทาง (Google Maps)
-          </a>
-        )}
-        {canEdit && (
-          <button
-            onClick={() => setPinOpen((v) => !v)}
-            className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            {survey.latitude != null ? "ปรับหมุดตำแหน่ง" : "📍 ปักตำแหน่งหน้างาน"}
-          </button>
-        )}
         {canEdit && (
           <Link to={`/surveys/${id}/edit`} className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             แก้ไขข้อมูล
@@ -282,16 +259,17 @@ export default function SurveyDetailPage() {
         )}
       </div>
 
-      {pinOpen && canEdit && (
-        <div className="rounded-lg border bg-white p-4">
-          <MapPinPicker
-            lat={survey.latitude != null ? Number(survey.latitude) : null}
-            lng={survey.longitude != null ? Number(survey.longitude) : null}
-            onChange={savePin}
-          />
-          {pinMsg && <p className="mt-2 text-sm text-gray-600">{pinMsg}</p>}
-        </div>
-      )}
+      {/* ตำแหน่งหน้างาน: ล็อกไว้ — นำทางได้ทุกคน, อัปเดตได้เฉพาะแอดมินหรือช่างที่ได้รับมอบหมาย */}
+      <div className="rounded-lg border bg-white p-3">
+        <div className="mb-2 text-sm font-medium text-gray-900">ตำแหน่งหน้างาน</div>
+        <LocationCard
+          lat={survey.latitude != null ? Number(survey.latitude) : null}
+          lng={survey.longitude != null ? Number(survey.longitude) : null}
+          mapUrl={typeof survey.map_url === "string" ? survey.map_url : null}
+          canUpdate={canUpdateLocation}
+          onSave={saveLocation}
+        />
+      </div>
 
       <div className="rounded-lg border bg-white p-4">
         <FormSection title="ข้อมูลลูกค้า">
@@ -627,6 +605,7 @@ const FIELD_LABELS: Record<string, string> = {
   customer_phone: "เบอร์โทร",
   customer_address: "ที่อยู่",
   map_url: "ลิงก์แผนที่",
+  location: "ตำแหน่งหมุด",
   sales_staff_id: "เซลผู้ดูแล",
   monthly_bill_thb: "ค่าไฟ/เดือน",
   monthly_usage_kwh: "หน่วยไฟ/เดือน",

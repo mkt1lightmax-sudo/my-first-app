@@ -8,6 +8,7 @@ const PERMISSIONS = {
   "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // แก้ข้อมูลลูกค้า — เฉพาะที่ตัวเองสร้าง/ได้รับมอบหมาย (ดู customers.editAll)
   "customers.filterByStaff": ["admin", "assistant"],                   // หน้าลูกค้า: กรองตามผู้สร้าง/เซล
   "customers.assignSales": ["admin", "assistant"],                     // เปลี่ยนเซลผู้ดูแลลูกค้า
+  "location.update": ["admin", "assistant"],                            // อัปเดตตำแหน่งหน้างาน (+ ช่าง/ผู้สำรวจที่ได้รับมอบหมายงานของลูกค้านั้น)
   "customers.editAll": ["admin"],                                       // แก้ข้อมูลลูกค้าได้ทุกคน + ลบ/กู้คืนจากถังขยะ
   "appointments.create": ["admin", "assistant"],                         // สร้างงานนัดหมาย — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.editAny": ["admin", "assistant"],                        // แก้งานของทุกคน — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"

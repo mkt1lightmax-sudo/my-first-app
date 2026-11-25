@@ -258,8 +258,7 @@ export default function SurveyFormPage() {
         customer_address: customerAddress || undefined,
         map_url: mapUrl.trim() || undefined,
         ...(canAssignSales ? { sales_staff_id: salesStaffId ? Number(salesStaffId) : null } : {}),
-        latitude: pin?.lat,
-        longitude: pin?.lng,
+        ...(isEditing ? {} : { latitude: pin?.lat, longitude: pin?.lng }),
 
         site_type: siteType || undefined,
         site_type_other: siteTypeOther || undefined,
@@ -376,6 +375,11 @@ export default function SurveyFormPage() {
               </select>
             </div>
           )}
+          {isEditing ? (
+            <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              ตำแหน่งหมุด: อัปเดตได้ที่หน้าลูกค้า ปุ่ม "อัปเดตตำแหน่งหน้างาน" (กันหมุดเลื่อนโดยไม่ตั้งใจ)
+            </p>
+          ) : (
           <div>
             <label className={labelClass}>ปักหมุดตำแหน่ง</label>
             <MapPinPicker
@@ -387,6 +391,7 @@ export default function SurveyFormPage() {
               }}
             />
           </div>
+          )}
         </FormSection>
 
         <FormSection title="1. ประเภทสถานที่">

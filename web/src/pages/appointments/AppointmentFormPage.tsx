@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import SurveySlotPicker from "./SurveySlotPicker";
 import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
+import LocationCard from "../../components/LocationCard";
 import { can, canEditAppointment, isOwner } from "../../lib/permissions";
 
 type StaffOption = { id: number; name: string; role: string };
@@ -66,6 +67,7 @@ export default function AppointmentFormPage() {
   const [customerAddress, setCustomerAddress] = useState("");
   const [mapUrl, setMapUrl] = useState("");
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [canUpdateLocation, setCanUpdateLocation] = useState(false);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [assignedStaffId, setAssignedStaffId] = useState("");
@@ -110,15 +112,19 @@ export default function AppointmentFormPage() {
 
   useEffect(() => {
     if (!isEditing) return;
-    api.get<{ ok: true; appointment: Appointment }>(`/appointments/${id}`).then((d) => {
+    api.get<{ ok: true; appointment: Appointment; canUpdateLocation: boolean }>(`/appointments/${id}`).then((d) => {
       const a = d.appointment;
+      setCanUpdateLocation(d.canUpdateLocation);
       setType(a.type);
       setSurveyId(a.survey_id ? String(a.survey_id) : "");
       setCustomerName(a.customer_name);
       setCustomerPhone(a.customer_phone ?? "");
       setCustomerAddress(a.customer_address ?? "");
       setMapUrl(a.map_url ?? "");
-      if (a.latitude != null && a.longitude != null) setPin({ lat: Number(a.latitude), lng: Number(a.longitude) });
+      // ผูกกับลูกค้า → ใช้ตำแหน่งของลูกค้า (ที่เดียวกันทุกนัด)
+      const la = a.survey_latitude ?? a.latitude;
+      const lo = a.survey_longitude ?? a.longitude;
+      if (la != null && lo != null) setPin({ lat: Number(la), lng: Number(lo) });
       setStart(toLocalInputValue(a.scheduled_start));
       setEnd(toLocalInputValue(a.scheduled_end));
       setAssignedStaffId(a.assigned_staff_id ? String(a.assigned_staff_id) : "");
@@ -189,8 +195,7 @@ export default function AppointmentFormPage() {
         customer_phone: customerPhone.replace(/[\s-]/g, "") || undefined,
         customer_address: customerAddress || undefined,
         map_url: mapUrl.trim() || (isEditing ? null : undefined),
-        latitude: pin?.lat,
-        longitude: pin?.lng,
+        ...(isEditing ? {} : { latitude: pin?.lat, longitude: pin?.lng }),
         scheduled_start: new Date(start).toISOString(),
         scheduled_end: new Date(end).toISOString(),
         assigned_staff_id: assignedStaffId ? Number(assignedStaffId) : undefined,
@@ -316,14 +321,29 @@ export default function AppointmentFormPage() {
             )}
           </div>
           <div className="mt-2">
-            <MapPinPicker
-              lat={pin?.lat ?? null}
-              lng={pin?.lng ?? null}
-              onChange={(lat, lng) => {
-                setPin({ lat, lng });
-                setMapUrl(googleMapsUrl(lat, lng));
-              }}
-            />
+            {isEditing ? (
+              // แก้ไขนัด: แผนที่ล็อก — นำทางได้ทุกคน, อัปเดตได้เฉพาะแอดมินหรือช่างที่ได้รับมอบหมาย
+              <LocationCard
+                lat={pin?.lat ?? null}
+                lng={pin?.lng ?? null}
+                mapUrl={mapUrl}
+                canUpdate={canUpdateLocation}
+                onSave={async (lat, lng) => {
+                  const d = await api.put<{ ok: true; location: { map_url: string } }>(`/appointments/${id}/location`, { latitude: lat, longitude: lng });
+                  setPin({ lat, lng });
+                  setMapUrl(d.location.map_url);
+                }}
+              />
+            ) : (
+              <MapPinPicker
+                lat={pin?.lat ?? null}
+                lng={pin?.lng ?? null}
+                onChange={(lat, lng) => {
+                  setPin({ lat, lng });
+                  setMapUrl(googleMapsUrl(lat, lng));
+                }}
+              />
+            )}
           </div>
         </div>
 

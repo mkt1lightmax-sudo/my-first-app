@@ -32,6 +32,9 @@ export type Appointment = {
   map_url?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  survey_latitude?: number | null; // ตำแหน่งของลูกค้าที่ผูกไว้
+  survey_longitude?: number | null;
+  survey_map_url?: string | null;
   customer_code?: string | null; // รหัสลูกค้า (ถ้างานผูกกับลูกค้า)
   sales_name?: string | null; // เซลที่ดูแลลูกค้า
   survey_fee?: string | number | null; // ค่าสำรวจ (บาท)
