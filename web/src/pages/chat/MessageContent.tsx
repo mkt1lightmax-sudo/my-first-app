@@ -147,6 +147,7 @@ function LinkifiedText({ text, out }: { text: string | null; out: boolean }) {
 function ChatImage({ src }: { src: string }) {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [zoom, setZoom] = useState(false);
+  const [fullWidth, setFullWidth] = useState(false);
 
   if (state === "error") {
     return (
@@ -171,14 +172,26 @@ function ChatImage({ src }: { src: string }) {
       </button>
       {zoom && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={() => setZoom(false)}>
-          <div className="flex justify-end gap-4 p-4 text-sm text-white">
-            <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="underline">
-              เปิดในแท็บใหม่
-            </a>
-            <button onClick={() => setZoom(false)}>ปิด ✕</button>
+          <div className="flex flex-shrink-0 items-center justify-between gap-4 p-4 text-sm text-white">
+            <span className="text-white/60">{fullWidth ? "แตะรูปเพื่อย่อให้พอดีจอ" : "แตะรูปเพื่อขยายเต็มความกว้าง"}</span>
+            <div className="flex gap-4">
+              <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="underline">
+                เปิดในแท็บใหม่
+              </a>
+              <button onClick={() => setZoom(false)}>ปิด ✕</button>
+            </div>
           </div>
-          <div className="flex flex-1 items-center justify-center p-4">
-            <img src={src} alt="รูปขนาดเต็ม" className="max-h-full max-w-full object-contain" />
+          {/* min-h-0 = กล่องนี้สูงไม่เกินจอ รูปจึงย่อพอดีจอ (เอกสารแนวตั้งยาวๆ ไม่ล้น) / แตะรูป = ขยายเต็มความกว้างแล้วเลื่อนดู */}
+          <div className={`min-h-0 flex-1 overflow-auto p-4 ${fullWidth ? "" : "flex items-center justify-center"}`}>
+            <img
+              src={src}
+              alt="รูปขนาดเต็ม"
+              onClick={(e) => {
+                e.stopPropagation();
+                setFullWidth((v) => !v);
+              }}
+              className={fullWidth ? "mx-auto h-auto w-full max-w-3xl cursor-zoom-out" : "max-h-full max-w-full cursor-zoom-in object-contain"}
+            />
           </div>
         </div>
       )}
