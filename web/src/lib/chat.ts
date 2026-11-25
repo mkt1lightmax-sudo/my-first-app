@@ -57,7 +57,7 @@ export type ChatFilters = {
 };
 
 // จำนวนแชทที่เปิดอยู่ของแต่ละผู้ดูแล
-export type AssigneeCount = { id: number; name: string; count: number };
+export type AssigneeCount = { id: number; name: string; count: number; pending: number };
 
 export const EMPTY_FILTERS: ChatFilters = {
   read: "",

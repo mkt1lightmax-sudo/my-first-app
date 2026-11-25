@@ -356,18 +356,30 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
 
   // จำนวนแชทที่เปิดอยู่ของแต่ละผู้ดูแล (ใช้กับปุ่มกรองตามเซล)
   let byAssignee = [];
+  let unassignedCount = null;
   if (can(req.staff, "chat.assignOthers")) {
+    // พนักงานที่รับแชทได้ทุกคน (รวมคนที่ยังไม่มีแชท) + แชทเปิดอยู่ + ค้างตอบ (ข้อความล่าสุดเป็นของลูกค้า)
     byAssignee = (
       await query(
-        `SELECT s.id, s.name, COUNT(c.id)::int AS count
-         FROM chat_conversations c JOIN staff s ON s.id = c.assigned_staff_id
-         WHERE c.status = 'open' AND NOT c.is_spam
-         GROUP BY s.id, s.name ORDER BY count DESC, s.name`
+        `SELECT s.id, s.name,
+                COUNT(c.id)::int AS count,
+                COUNT(c.id) FILTER (WHERE c.last_message_direction = 'in')::int AS pending
+         FROM staff s
+         LEFT JOIN chat_conversations c ON c.assigned_staff_id = s.id AND c.status = 'open' AND NOT c.is_spam
+         WHERE s.role IN ('admin', 'assistant', 'sales') OR s.is_owner OR c.id IS NOT NULL
+         GROUP BY s.id, s.name ORDER BY count DESC, pending DESC, s.name`
       )
     ).rows;
+    const un = (
+      await query(
+        `SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE last_message_direction = 'in')::int AS pending
+         FROM chat_conversations WHERE status = 'open' AND NOT is_spam AND assigned_staff_id IS NULL`
+      )
+    ).rows[0];
+    unassignedCount = un;
   }
 
-  res.json({ ok: true, conversations: result.rows, counts, byAssignee });
+  res.json({ ok: true, conversations: result.rows, counts, byAssignee, unassignedCount });
 });
 
 // ---------- การจัดการทิกเก็ต ----------

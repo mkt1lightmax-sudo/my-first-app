@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AssigneeList from "./AssigneeList";
 import { CHANNEL_LABELS, EMPTY_FILTERS, type AssigneeCount, type ChatAccount, type ChatFilters } from "../../lib/chat";
 
 // แผงตัวกรองที่เลื่อนขึ้นจากด้านล่าง (แบบแอปมือถือ)
@@ -8,6 +9,7 @@ export default function FilterSheet({
   accounts,
   canSeeUnassigned,
   assignees = [],
+  unassignedCount = null,
   onApply,
   onClose,
 }: {
@@ -16,6 +18,7 @@ export default function FilterSheet({
   accounts: ChatAccount[];
   canSeeUnassigned: boolean;
   assignees?: AssigneeCount[]; // แสดงหัวข้อ "ผู้ดูแล" เมื่อมีข้อมูล (เจ้าของ/แอดมิน/ผู้ช่วยแอดมิน)
+  unassignedCount?: { count: number; pending: number } | null;
   onApply: (f: ChatFilters) => void;
   onClose: () => void;
 }) {
@@ -101,20 +104,24 @@ export default function FilterSheet({
 
           {assignees.length > 0 && (
             <Section title="ผู้ดูแล (เซล)">
-              <div className="flex flex-wrap gap-2">
-                {assignees.map((a) => {
-                  const on = f.assignees.includes(a.id);
-                  return (
-                    <Chip
-                      key={a.id}
-                      active={on}
-                      onClick={() => set("assignees", on ? f.assignees.filter((x) => x !== a.id) : [...f.assignees, a.id])}
-                    >
-                      {a.name} ({a.count})
-                    </Chip>
-                  );
-                })}
-              </div>
+              {/* เลือกได้หลายคน */}
+              <AssigneeList
+                items={assignees}
+                unassigned={unassignedCount}
+                isSelected={(c) =>
+                  c === "all" ? f.assignees.length === 0 && !f.unassigned : c === "unassigned" ? f.unassigned : f.assignees.includes(c)
+                }
+                onPick={(c) => {
+                  if (c === "all") setF((p) => ({ ...p, assignees: [], unassigned: false }));
+                  else if (c === "unassigned") setF((p) => ({ ...p, unassigned: !p.unassigned, assignees: [] }));
+                  else
+                    setF((p) => ({
+                      ...p,
+                      unassigned: false,
+                      assignees: p.assignees.includes(c) ? p.assignees.filter((x) => x !== c) : [...p.assignees, c],
+                    }));
+                }}
+              />
             </Section>
           )}
 

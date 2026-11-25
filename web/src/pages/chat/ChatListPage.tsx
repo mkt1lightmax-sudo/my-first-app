@@ -17,6 +17,7 @@ import { BookmarkIcon, FilterIcon, SearchIcon, UserIcon } from "../../components
 import { useAuth } from "../../context/AuthContext";
 import { can, isOwner } from "../../lib/permissions";
 import FilterSheet from "./FilterSheet";
+import AssigneeList from "./AssigneeList";
 
 type View = "mine" | "all" | "closed";
 
@@ -36,6 +37,8 @@ export default function ChatListPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [accounts, setAccounts] = useState<ChatAccount[]>([]);
   const [byAssignee, setByAssignee] = useState<AssigneeCount[]>([]);
+  const [unassignedCount, setUnassignedCount] = useState<{ count: number; pending: number } | null>(null);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
 
   useEffect(() => {
     api.get<{ ok: true; tags: string[] }>("/chat/tags").then((d) => setTags(d.tags)).catch(() => {});
@@ -63,11 +66,18 @@ export default function ChatListPage() {
 
     function load() {
       api
-        .get<{ ok: true; conversations: Conversation[]; counts: ChatCounts; byAssignee?: AssigneeCount[] }>(`/chat/conversations?${p}`)
+        .get<{
+          ok: true;
+          conversations: Conversation[];
+          counts: ChatCounts;
+          byAssignee?: AssigneeCount[];
+          unassignedCount?: { count: number; pending: number } | null;
+        }>(`/chat/conversations?${p}`)
         .then((d) => {
           setConversations(d.conversations);
           setCounts(d.counts);
           setByAssignee(d.byAssignee ?? []);
+          setUnassignedCount(d.unassignedCount ?? null);
           setError(null);
         })
         .catch(() => setError("โหลดรายการแชทไม่สำเร็จ"));
@@ -80,6 +90,17 @@ export default function ChatListPage() {
   if (staff && !can(staff, "chat.view")) return <Navigate to="/" replace />;
 
   const activeFilters = countActiveFilters(filters);
+  // ข้อความบนปุ่มผู้ดูแล
+  const assigneeLabel = filters.unassigned
+    ? "ยังไม่มีคนดูแล"
+    : filters.assignees.length === 1
+      ? (() => {
+          const a = byAssignee.find((x) => x.id === filters.assignees[0]);
+          return a ? `${a.name} (${a.count})` : "1 คน";
+        })()
+      : filters.assignees.length > 1
+        ? `${filters.assignees.length} คน`
+        : "";
   const tabs: { value: View; label: string; count?: number }[] = [
     ...(canReply ? [{ value: "mine" as View, label: "ของฉัน", count: counts?.mine }] : []),
     { value: "all", label: "ทั้งหมด", count: counts?.open },
@@ -157,30 +178,28 @@ export default function ChatListPage() {
           ))}
         </div>
 
-        {/* ปุ่มลัดกรองตามผู้ดูแล (เจ้าของ / แอดมิน / ผู้ช่วยแอดมิน) */}
+        {/* ปุ่มเลือกผู้ดูแล (เจ้าของ / แอดมิน / ผู้ช่วยแอดมิน) — กดแล้วเปิดรายชื่อพร้อมค้นหา */}
         {byAssignee.length > 0 && (
-          <div className="no-scrollbar -mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 text-sm">
-            <span className="flex flex-shrink-0 items-center pr-1 text-xs text-gray-400">ผู้ดูแล:</span>
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <span className="text-xs text-gray-400">ผู้ดูแล:</span>
             <button
-              onClick={() => setFilters({ ...filters, assignees: [] })}
-              className={`flex-shrink-0 rounded-full px-3 py-1 ${
-                filters.assignees.length === 0 ? "bg-brand-navy text-white" : "bg-white text-gray-600 ring-1 ring-gray-200"
+              onClick={() => setAssigneeOpen(true)}
+              className={`flex min-w-0 items-center gap-1 rounded-full px-3 py-1 ${
+                assigneeLabel ? "bg-brand-navy text-white" : "bg-white text-gray-700 ring-1 ring-gray-200"
               }`}
             >
-              ทุกคน
+              <span className="truncate">{assigneeLabel || "ทุกคน"}</span>
+              <span aria-hidden>▾</span>
             </button>
-            {byAssignee.map((a) => {
-              const on = filters.assignees.length === 1 && filters.assignees[0] === a.id;
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => setFilters({ ...filters, assignees: on ? [] : [a.id] })}
-                  className={`flex-shrink-0 rounded-full px-3 py-1 ${on ? "bg-brand-navy text-white" : "bg-white text-gray-600 ring-1 ring-gray-200"}`}
-                >
-                  {a.name} <span className={on ? "text-white/70" : "text-gray-400"}>{a.count}</span>
-                </button>
-              );
-            })}
+            {assigneeLabel && (
+              <button
+                onClick={() => setFilters({ ...filters, assignees: [], unassigned: false })}
+                aria-label="ดูทุกคน"
+                className="px-1 text-lg leading-none text-gray-400"
+              >
+                ×
+              </button>
+            )}
           </div>
         )}
 
@@ -206,10 +225,44 @@ export default function ChatListPage() {
         ))}
       </div>
 
+      {assigneeOpen && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setAssigneeOpen(false)} />
+          <div className="relative flex max-h-[80vh] w-full max-w-md flex-col rounded-t-3xl bg-white px-5 pb-6 pt-3 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="font-semibold text-gray-900">เลือกผู้ดูแล</span>
+              <button onClick={() => setAssigneeOpen(false)} className="text-sm text-gray-500">
+                ปิด
+              </button>
+            </div>
+            <div className="min-h-0 overflow-y-auto">
+              <AssigneeList
+                items={byAssignee}
+                unassigned={unassignedCount}
+                isSelected={(c) =>
+                  c === "all"
+                    ? filters.assignees.length === 0 && !filters.unassigned
+                    : c === "unassigned"
+                      ? filters.unassigned
+                      : filters.assignees.length === 1 && filters.assignees[0] === c
+                }
+                onPick={(c) => {
+                  if (c === "all") setFilters({ ...filters, assignees: [], unassigned: false });
+                  else if (c === "unassigned") setFilters({ ...filters, assignees: [], unassigned: true });
+                  else setFilters({ ...filters, assignees: [c], unassigned: false });
+                  setAssigneeOpen(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {filterOpen && (
         <FilterSheet
           value={filters}
           assignees={byAssignee}
+          unassignedCount={unassignedCount}
           tags={tags}
           accounts={accounts}
           canSeeUnassigned={canReply}
