@@ -16,6 +16,7 @@ const PERMISSIONS = {
   "chat.assignOthers": ["admin", "assistant"],
   "reports.view": ["admin", "assistant", "sales", "viewer"],
   "reports.viewAll": ["admin", "assistant", "viewer"],
+  "appointments.fee": ["admin", "assistant", "sales"],                 // กรอกค่าสำรวจ / กด "จ่ายแล้ว"
   "appointments.override": ["admin", "assistant"],                     // สำรวจ: จองนอกช่องคิว / จองซ้อนได้ ("เวลาอื่น")
   "timeoff.manageAll": ["admin", "assistant"],                         // แจ้งหยุดแทนพนักงานคนอื่น
   "staff.manage": ["admin"],

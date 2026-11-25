@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon } from "../components/icons";
-import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPE_STYLES, formatDateTime, jobPeople, type Appointment } from "../lib/appointments";
+import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPE_STYLES, formatDateTime, jobPeople, surveyFeeBadge, type Appointment } from "../lib/appointments";
 
 const actionCards = [
   {
@@ -90,6 +90,9 @@ export default function DashboardPage() {
                   {formatDateTime(a.scheduled_start)}
                 </div>
                 <div className="mt-0.5 text-xs text-gray-500">{jobPeople(a)}</div>
+                {surveyFeeBadge(a) && (
+                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${surveyFeeBadge(a)!.className}`}>{surveyFeeBadge(a)!.text}</span>
+                )}
               </div>
               <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />
             </Link>

@@ -71,6 +71,12 @@ export default function AppointmentFormPage() {
   const [assignedStaffId, setAssignedStaffId] = useState("");
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [notes, setNotes] = useState("");
+  // ค่าสำรวจ (เฉพาะนัดสำรวจหน้างาน)
+  const canFee = can(staff, "appointments.fee");
+  const [surveyFee, setSurveyFee] = useState("");
+  const [feePaid, setFeePaid] = useState(false);
+  const [feeNote, setFeeNote] = useState("");
+  const [feePaidInfo, setFeePaidInfo] = useState("");
   // งานสำรวจ: เลือกจากช่องคิว / แอดมินเลือก "เวลาอื่น" เพื่อกรอกเวลาเองได้
   const canOverride = can(staff, "appointments.override");
   const [overrideMode, setOverrideMode] = useState(false);
@@ -119,6 +125,14 @@ export default function AppointmentFormPage() {
       setLoadedAssignedId(a.assigned_staff_id ?? null);
       setStatus(a.status);
       setNotes(a.notes ?? "");
+      setSurveyFee(a.survey_fee != null ? String(Number(a.survey_fee)) : "");
+      setFeePaid(Boolean(a.survey_fee_paid));
+      setFeeNote(a.survey_fee_note ?? "");
+      setFeePaidInfo(
+        a.survey_fee_paid && a.survey_fee_paid_at
+          ? `กดจ่ายแล้วโดย ${a.survey_fee_paid_by_name || "-"} · ${new Date(a.survey_fee_paid_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`
+          : ""
+      );
       setSlotDate(toLocalInputValue(a.scheduled_start).slice(0, 10));
       // งานสำรวจเก่าที่ไม่ตรงช่องคิว: แอดมินแก้ต่อแบบ "เวลาอื่น"
       if (a.type === "site_survey" && !isStandardSurvey(a.scheduled_start, a.scheduled_end) && canOverride) setOverrideMode(true);
@@ -183,6 +197,9 @@ export default function AppointmentFormPage() {
         status: isEditing ? status : undefined,
         notes: notes || undefined,
         override: type === "site_survey" && overrideMode ? true : undefined,
+        ...(type === "site_survey" && canFee
+          ? { survey_fee: surveyFee ? Number(surveyFee) : null, survey_fee_paid: surveyFee ? feePaid : false, survey_fee_note: feeNote || null }
+          : {}),
       };
       if (isEditing) {
         await api.patch(`/appointments/${id}`, payload);
@@ -366,6 +383,54 @@ export default function AppointmentFormPage() {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {type === "site_survey" && (canFee || surveyFee) && (
+          <div className="rounded-xl border border-dashed p-3">
+            <div className="mb-2 text-sm font-medium text-gray-900">ค่าสำรวจ (ถ้ามี)</div>
+            <fieldset disabled={!canFee} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={surveyFee}
+                  onChange={(e) => setSurveyFee(e.target.value)}
+                  placeholder="เช่น 5000 (เว้นว่าง = ฟรี)"
+                  className={`${inputClass} min-w-0 flex-1`}
+                />
+                <span className="text-sm text-gray-500">บาท</span>
+              </div>
+              {surveyFee && Number(surveyFee) > 0 && (
+                <>
+                  <div className="flex rounded-lg bg-gray-100 p-1 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setFeePaid(false)}
+                      className={`flex-1 rounded-md py-1.5 ${!feePaid ? "bg-white font-medium text-[#9A5B23] shadow-sm" : "text-gray-500"}`}
+                    >
+                      ยังไม่จ่าย
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeePaid(true)}
+                      className={`flex-1 rounded-md py-1.5 ${feePaid ? "bg-white font-medium text-[#4C6B57] shadow-sm" : "text-gray-500"}`}
+                    >
+                      จ่ายแล้ว ✓
+                    </button>
+                  </div>
+                  <input
+                    value={feeNote}
+                    onChange={(e) => setFeeNote(e.target.value)}
+                    placeholder="หมายเหตุการจ่าย เช่น โอนเข้ากสิกร 25 พ.ย."
+                    className={inputClass}
+                  />
+                  {feePaidInfo && feePaid && <p className="text-xs text-gray-400">{feePaidInfo}</p>}
+                </>
+              )}
+            </fieldset>
+            {!canFee && <p className="mt-1 text-xs text-gray-400">แก้ค่าสำรวจได้เฉพาะแอดมิน ผู้ช่วยแอดมิน และเซล</p>}
           </div>
         )}
 

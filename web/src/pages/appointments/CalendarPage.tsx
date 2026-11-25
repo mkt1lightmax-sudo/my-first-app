@@ -8,6 +8,7 @@ import {
   APPOINTMENT_TYPES,
   APPOINTMENT_TYPE_STYLES,
   jobPeople,
+  surveyFeeBadge,
   formatTime,
   dateKey,
   TIME_OFF_LABELS,
@@ -206,6 +207,9 @@ export default function CalendarPage() {
                     {a.customer_code && <span className="ml-1 text-gray-400">{a.customer_code}</span>}
                   </div>
                   <div className="mt-0.5 text-xs text-brand-navy">{jobPeople(a)}</div>
+                  {surveyFeeBadge(a) && (
+                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${surveyFeeBadge(a)!.className}`}>{surveyFeeBadge(a)!.text}</span>
+                  )}
                 </div>
                 <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />
               </Link>

@@ -5,6 +5,7 @@ import {
   APPOINTMENT_TYPE_LABELS,
   APPOINTMENT_TYPE_STYLES,
   jobPeople,
+  surveyFeeBadge,
   APPOINTMENT_STATUS_LABELS,
   APPOINTMENT_STATUS_COLORS,
   formatDateTime,
@@ -60,6 +61,9 @@ export default function AppointmentsListPage() {
                 {formatDateTime(a.scheduled_start)}
               </div>
               <div className="mt-0.5 text-xs text-brand-navy">{jobPeople(a)}</div>
+              {surveyFeeBadge(a) && (
+                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${surveyFeeBadge(a)!.className}`}>{surveyFeeBadge(a)!.text}</span>
+              )}
             </div>
             <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />
           </Link>

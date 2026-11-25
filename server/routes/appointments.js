@@ -85,7 +85,43 @@ const EDITABLE_FIELDS = [
   "assigned_staff_id",
   "status",
   "notes",
+  // ค่าสำรวจ (เปลี่ยนได้เฉพาะคนที่มีสิทธิ์ appointments.fee)
+  "survey_fee",
+  "survey_fee_paid",
+  "survey_fee_note",
+  "survey_fee_paid_at",
+  "survey_fee_paid_by",
 ];
+
+const FEE_FIELDS = ["survey_fee", "survey_fee_paid", "survey_fee_note"];
+
+// ทำความสะอาดค่าสำรวจจากฟอร์ม + ใส่ว่าใครกดจ่ายแล้วเมื่อไหร่ (ไม่รับค่าพวกนี้จากหน้าเว็บตรงๆ)
+function applyFeeFields(body, existing, staff) {
+  delete body.survey_fee_paid_at;
+  delete body.survey_fee_paid_by;
+  if ("survey_fee" in body) {
+    const n = Number(body.survey_fee);
+    body.survey_fee = body.survey_fee === "" || body.survey_fee == null || !Number.isFinite(n) || n <= 0 ? null : n;
+  }
+  if ("survey_fee_note" in body) body.survey_fee_note = String(body.survey_fee_note || "").trim() || null;
+  if ("survey_fee_paid" in body) {
+    body.survey_fee_paid = Boolean(body.survey_fee_paid);
+    const was = Boolean(existing?.survey_fee_paid);
+    if (body.survey_fee_paid && !was) {
+      body.survey_fee_paid_at = new Date();
+      body.survey_fee_paid_by = staff.id;
+    } else if (!body.survey_fee_paid && was) {
+      body.survey_fee_paid_at = null;
+      body.survey_fee_paid_by = null;
+    }
+  }
+}
+
+// มีการเปลี่ยนค่าสำรวจไหม (เทียบกับของเดิม)
+function feeChanged(body, existing) {
+  const norm = (f, v) => (v == null || v === "" ? "" : f === "survey_fee" ? String(Number(v)) : f === "survey_fee_paid" ? String(Boolean(v)) : String(v));
+  return FEE_FIELDS.some((f) => f in body && norm(f, body[f]) !== norm(f, existing?.[f] ?? (f === "survey_fee_paid" ? false : null)));
+}
 
 const TYPE_LABELS = {
   site_survey: "สำรวจหน้างาน",
@@ -155,9 +191,24 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
     ]
   );
 
-  await notifyAssignment(result.rows[0], req.staff.id);
+  let created = result.rows[0];
+  if (FEE_FIELDS.some((f) => f in req.body) && feeChanged(req.body, null)) {
+    if (can(req.staff, "appointments.fee")) {
+      const fee = { ...req.body };
+      applyFeeFields(fee, null, req.staff);
+      created = (
+        await query(
+          `UPDATE appointments SET survey_fee = $1, survey_fee_paid = $2, survey_fee_note = $3, survey_fee_paid_at = $4, survey_fee_paid_by = $5
+           WHERE id = $6 RETURNING *`,
+          [fee.survey_fee ?? null, fee.survey_fee_paid ?? false, fee.survey_fee_note ?? null, fee.survey_fee_paid_at ?? null, fee.survey_fee_paid_by ?? null, created.id]
+        )
+      ).rows[0];
+    }
+  }
 
-  res.status(201).json({ ok: true, appointment: result.rows[0] });
+  await notifyAssignment(created, req.staff.id);
+
+  res.status(201).json({ ok: true, appointment: created });
 });
 
 router.get("/", requireAuth, async (req, res) => {
@@ -189,11 +240,12 @@ router.get("/", requireAuth, async (req, res) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const result = await query(
     `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
-            sv.customer_code, cs.name AS sales_name
+            sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
      LEFT JOIN staff cs ON cs.id = COALESCE(sv.created_by, a.created_by)
+     LEFT JOIN staff fp ON fp.id = a.survey_fee_paid_by
      ${where}
      ORDER BY a.scheduled_start ASC`,
     params
@@ -204,11 +256,12 @@ router.get("/", requireAuth, async (req, res) => {
 router.get("/:id", requireAuth, async (req, res) => {
   const result = await query(
     `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
-            sv.customer_code, cs.name AS sales_name
+            sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
      LEFT JOIN staff cs ON cs.id = COALESCE(sv.created_by, a.created_by)
+     LEFT JOIN staff fp ON fp.id = a.survey_fee_paid_by
      WHERE a.id = $1`,
     [req.params.id]
   );
@@ -234,6 +287,14 @@ router.patch("/:id", requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: "คุณย้ายงานไปให้คนอื่นไม่ได้" });
     }
   }
+
+  // ค่าสำรวจ: เปลี่ยนได้เฉพาะแอดมิน / ผู้ช่วยแอดมิน / เซล — คนอื่นส่งมาก็ไม่สนใจค่าที่ไม่เปลี่ยน
+  if (feeChanged(req.body, existing.rows[0])) {
+    if (!can(req.staff, "appointments.fee")) return res.status(403).json({ ok: false, error: "คุณแก้ค่าสำรวจไม่ได้" });
+  } else {
+    for (const f of FEE_FIELDS) delete req.body[f];
+  }
+  applyFeeFields(req.body, existing.rows[0], req.staff);
 
   if ("map_url" in req.body) {
     const t = String(req.body.map_url || "").trim();

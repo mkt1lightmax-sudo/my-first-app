@@ -34,6 +34,11 @@ export type Appointment = {
   longitude?: number | null;
   customer_code?: string | null; // รหัสลูกค้า (ถ้างานผูกกับลูกค้า)
   sales_name?: string | null; // เซลที่ดูแลลูกค้า
+  survey_fee?: string | number | null; // ค่าสำรวจ (บาท)
+  survey_fee_paid?: boolean;
+  survey_fee_note?: string | null;
+  survey_fee_paid_at?: string | null;
+  survey_fee_paid_by_name?: string | null;
   scheduled_start: string;
   scheduled_end: string;
   assigned_staff_id: number | null;
@@ -92,4 +97,14 @@ export function jobPeople(a: Appointment) {
   if (a.sales_name) parts.push(`เซล: ${a.sales_name}`);
   parts.push(`${ASSIGNEE_LABELS[a.type]}: ${a.assigned_staff_name || "ยังไม่ระบุ"}`);
   return parts.join(" · ");
+}
+
+// ป้ายค่าสำรวจ: null ถ้าไม่มีค่าสำรวจ
+export function surveyFeeBadge(a: Appointment): { text: string; className: string } | null {
+  const fee = a.survey_fee != null ? Number(a.survey_fee) : 0;
+  if (!fee) return null;
+  const amount = fee.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+  return a.survey_fee_paid
+    ? { text: `ค่าสำรวจ ${amount} · จ่ายแล้ว ✓`, className: "bg-[#EDF4EF] text-[#4C6B57]" }
+    : { text: `ค่าสำรวจ ${amount} · ยังไม่จ่าย`, className: "bg-[#FBEFE3] text-[#9A5B23]" };
 }
