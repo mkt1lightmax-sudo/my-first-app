@@ -37,6 +37,16 @@ router.get("/", requireAuth, async (req, res) => {
 });
 
 // เพิ่มพนักงานใหม่ — เจ้าของ/แอดมิน (สร้างแอดมินได้เฉพาะเจ้าของ)
+// แก้ชื่อพนักงาน — เฉพาะเจ้าของระบบ (แก้ได้ทุกคนรวมถึงตัวเอง) ชื่อใหม่แสดงทุกหน้าทันที
+router.put("/:id/name", requireAuth, requireOwner, async (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ ok: false, error: "กรุณากรอกชื่อ" });
+  if (name.length > 60) return res.status(400).json({ ok: false, error: "ชื่อยาวเกิน 60 ตัวอักษร" });
+  const result = await query("UPDATE staff SET name = $2 WHERE id = $1 RETURNING id, name, email, role, is_owner", [req.params.id, name]);
+  if (!result.rows[0]) return res.status(404).json({ ok: false, error: "staff not found" });
+  res.json({ ok: true, staff: result.rows[0] });
+});
+
 router.post("/", requireAuth, requirePermission("staff.manage"), async (req, res) => {
   const { name, email, password, role } = req.body;
   if (!name || !email || !password || !role) {

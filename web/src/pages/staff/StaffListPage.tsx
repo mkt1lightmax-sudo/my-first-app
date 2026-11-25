@@ -38,6 +38,20 @@ export default function StaffListPage() {
     }
   }
 
+  // แก้ชื่อ (เฉพาะเจ้าของ)
+  async function handleRename(s: StaffMember) {
+    const name = window.prompt(`ชื่อใหม่ของ ${s.name}`, s.name)?.trim();
+    if (!name || name === s.name) return;
+    setError(null);
+    try {
+      const d = await api.put<{ ok: true; staff: StaffMember }>(`/staff/${s.id}/name`, { name });
+      setStaffList((list) => list?.map((x) => (x.id === s.id ? { ...x, name: d.staff.name } : x)) ?? null);
+      setNotice(`เปลี่ยนชื่อเป็น "${d.staff.name}" แล้ว — แสดงทุกหน้าทันที${s.id === currentStaff?.id ? " (รีเฟรชเพื่อเห็นชื่อใหม่ที่หัวแอป)" : ""}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "แก้ชื่อไม่สำเร็จ");
+    }
+  }
+
   async function handleRoleChange(s: StaffMember, role: StaffRole) {
     if (role === s.role) return;
     if (!confirm(`เปลี่ยนตำแหน่งของ ${s.name} เป็น "${STAFF_ROLE_LABELS[role]}"?\nมีผลทันทีทุกเครื่องที่ล็อกอินอยู่`)) return;
@@ -104,6 +118,11 @@ export default function StaffListPage() {
               )}
             </div>
             <div className="flex flex-shrink-0 flex-col items-end gap-2">
+              {isOwner(currentStaff) && (
+                <button onClick={() => handleRename(s)} className="text-sm text-brand-navy hover:underline">
+                  แก้ชื่อ
+                </button>
+              )}
               {isOwner(currentStaff) && (
                 <button onClick={() => setPasswordFor(s)} className="text-sm text-brand-navy hover:underline">
                   เปลี่ยนรหัส
