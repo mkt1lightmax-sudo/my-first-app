@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { can } from "../lib/permissions";
 import { api } from "../lib/api";
 import { ClipboardIcon, CalculatorIcon, CalendarClockIcon, CalendarIcon, ChevronRightIcon } from "../components/icons";
 import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPE_STYLES, formatDateTime, jobPeople, surveyFeeBadge, type Appointment } from "../lib/appointments";
@@ -22,6 +23,7 @@ const actionCards = [
   },
   {
     to: "/appointments/new",
+    permission: "appointments.create" as const, // เซลยังสร้างนัดไม่ได้ (ปิดชั่วคราว)
     label: "นัดหมาย",
     subtitle: "สำรวจและติดตั้ง",
     icon: CalendarClockIcon,
@@ -59,7 +61,7 @@ export default function DashboardPage() {
       <p className="mt-1 text-gray-500">วันนี้ต้องการทำรายการอะไร?</p>
 
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
-        {actionCards.map((card) => {
+        {actionCards.filter((card) => !card.permission || can(staff, card.permission)).map((card) => {
           const tone = toneClasses[card.tone];
           return (
             <Link

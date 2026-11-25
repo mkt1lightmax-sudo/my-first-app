@@ -5,8 +5,8 @@ const PERMISSIONS = {
   "customers.create": ["admin", "assistant", "sales", "surveyor"],      // เพิ่มลูกค้าใหม่
   "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // แก้ข้อมูลลูกค้า — เฉพาะที่ตัวเองสร้าง/ได้รับมอบหมาย (ดู customers.editAll)
   "customers.editAll": ["admin"],                                       // แก้ข้อมูลลูกค้าได้ทุกคน + ลบ/กู้คืนจากถังขยะ
-  "appointments.create": ["admin", "assistant", "sales"],               // สร้างงานนัดหมาย
-  "appointments.editAny": ["admin", "assistant", "sales"],              // แก้งานของทุกคน
+  "appointments.create": ["admin", "assistant"],                         // สร้างงานนัดหมาย — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
+  "appointments.editAny": ["admin", "assistant"],                        // แก้งานของทุกคน — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.editOwn": ["surveyor", "installer"],       // แก้เฉพาะงานที่มอบหมายให้ตัวเอง
   "chat.view": ["admin", "assistant", "sales", "viewer"],               // ดูแชท
   "chat.viewAll": ["admin", "assistant", "viewer"],                     // เห็นแชททุกห้อง (เซลล์เห็นเฉพาะของตัวเอง + ที่ยังไม่มีคนดูแล)
@@ -14,7 +14,7 @@ const PERMISSIONS = {
   "chat.assignOthers": ["admin", "assistant"],                          // มอบหมายแชทให้คนอื่น
   "reports.view": ["admin", "assistant", "sales", "viewer"],            // ดูรายงานยอดขาย (เซลล์เห็นเฉพาะของตัวเอง)
   "reports.viewAll": ["admin", "assistant", "viewer"],                  // ดูยอดขายของทุกคน
-  "appointments.fee": ["admin", "assistant", "sales"],                 // กรอกค่าสำรวจ / กด "จ่ายแล้ว"
+  "appointments.fee": ["admin", "assistant"],                            // กรอกค่าสำรวจ / กด "จ่ายแล้ว" — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.override": ["admin", "assistant"],                     // สำรวจ: จองนอกช่องคิว / จองซ้อนได้ ("เวลาอื่น")
   "timeoff.manageAll": ["admin", "assistant"],                         // แจ้งหยุดแทนพนักงานคนอื่น
   "staff.manage": ["admin"],                              // เพิ่ม/ลบพนักงาน (แอดมินจัดการแอดมินด้วยกันไม่ได้)

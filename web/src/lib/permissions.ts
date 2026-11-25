@@ -7,8 +7,8 @@ const PERMISSIONS = {
   "customers.create": ["admin", "assistant", "sales", "surveyor"],      // เพิ่มลูกค้าใหม่
   "customers.edit": ["admin", "assistant", "sales", "surveyor"],        // แก้ข้อมูลลูกค้า — เฉพาะที่ตัวเองสร้าง/ได้รับมอบหมาย (ดู customers.editAll)
   "customers.editAll": ["admin"],                                       // แก้ข้อมูลลูกค้าได้ทุกคน + ลบ/กู้คืนจากถังขยะ
-  "appointments.create": ["admin", "assistant", "sales"],
-  "appointments.editAny": ["admin", "assistant", "sales"],
+  "appointments.create": ["admin", "assistant"],                         // สร้างงานนัดหมาย — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
+  "appointments.editAny": ["admin", "assistant"],                        // แก้งานของทุกคน — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.editOwn": ["surveyor", "installer"],
   "chat.view": ["admin", "assistant", "sales", "viewer"],
   "chat.viewAll": ["admin", "assistant", "viewer"],
@@ -16,7 +16,7 @@ const PERMISSIONS = {
   "chat.assignOthers": ["admin", "assistant"],
   "reports.view": ["admin", "assistant", "sales", "viewer"],
   "reports.viewAll": ["admin", "assistant", "viewer"],
-  "appointments.fee": ["admin", "assistant", "sales"],                 // กรอกค่าสำรวจ / กด "จ่ายแล้ว"
+  "appointments.fee": ["admin", "assistant"],                            // กรอกค่าสำรวจ / กด "จ่ายแล้ว" — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.override": ["admin", "assistant"],                     // สำรวจ: จองนอกช่องคิว / จองซ้อนได้ ("เวลาอื่น")
   "timeoff.manageAll": ["admin", "assistant"],                         // แจ้งหยุดแทนพนักงานคนอื่น
   "staff.manage": ["admin"],
