@@ -1,18 +1,13 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const { query } = require("../db/pool");
-const { signToken, COOKIE_NAME } = require("../lib/jwt");
+const { signToken, COOKIE_NAME, COOKIE_OPTIONS } = require("../lib/jwt");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
-const isProd = process.env.NODE_ENV === "production";
-const cookieOptions = {
-  httpOnly: true,
-  secure: isProd,
-  sameSite: "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 วัน
-};
+// จำการล็อกอิน 90 วัน (ต่ออายุอัตโนมัติเมื่อใช้งาน) — ตั้งค่าที่ lib/jwt.js
+const cookieOptions = COOKIE_OPTIONS;
 
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;

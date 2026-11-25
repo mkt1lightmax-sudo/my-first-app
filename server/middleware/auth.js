@@ -1,4 +1,4 @@
-const { verifyToken, COOKIE_NAME } = require("../lib/jwt");
+const { verifyToken, signToken, COOKIE_NAME, COOKIE_OPTIONS, RENEW_AFTER_SECONDS } = require("../lib/jwt");
 const { query } = require("../db/pool");
 
 // ตรวจว่าล็อกอินอยู่ — และเช็กกับฐานข้อมูลทุกครั้งว่าพนักงานคนนี้ยังมีอยู่
@@ -34,6 +34,11 @@ async function requireAuth(req, res, next) {
 
   delete staff.password_changed_at;
   req.staff = staff;
+
+  // ต่ออายุการล็อกอิน: ใช้งานอยู่ = นับ 90 วันใหม่ (ออก cookie ใหม่วันละครั้งพอ)
+  if (Date.now() / 1000 - (payload.iat || 0) > RENEW_AFTER_SECONDS) {
+    res.cookie(COOKIE_NAME, signToken({ id: staff.id, name: staff.name, email: staff.email, role: staff.role }), COOKIE_OPTIONS);
+  }
   next();
 }
 
