@@ -48,3 +48,10 @@ export function formatTime(iso: string) {
 export function dateKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// สีประจำประเภทงาน — โทนอ่อน สุภาพ ไม่ฉูดฉาด (ใช้ในปฏิทินและรายการงาน)
+export const APPOINTMENT_TYPE_STYLES: Record<AppointmentType, { dot: string; bar: string; badge: string }> = {
+  site_survey: { dot: "bg-[#7C93B0]", bar: "border-l-[#7C93B0]", badge: "bg-[#EEF2F7] text-[#4A5F7A]" },
+  presentation: { dot: "bg-[#C4A574]", bar: "border-l-[#C4A574]", badge: "bg-[#F7F1E6] text-[#7A6440]" },
+  installation: { dot: "bg-[#86A893]", bar: "border-l-[#86A893]", badge: "bg-[#EDF4EF] text-[#4C6B57]" },
+};

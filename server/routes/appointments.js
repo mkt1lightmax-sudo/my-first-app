@@ -81,7 +81,8 @@ router.get("/", requireAuth, async (req, res) => {
 
   if (req.query.from) {
     params.push(req.query.from);
-    conditions.push(`scheduled_start >= $${params.length}`);
+    // งานหลายวัน: นับงานที่ยังไม่จบในช่วงนี้ด้วย (เริ่มก่อนช่วงแต่จบในช่วง)
+    conditions.push(`scheduled_end >= $${params.length}`);
   }
   if (req.query.to) {
     params.push(req.query.to);
