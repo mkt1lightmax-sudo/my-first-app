@@ -180,6 +180,7 @@ export default function CalendarPage() {
               {selectedOff.map((t) => (
                 <span key={t.id} className="rounded-full bg-white px-3 py-1 text-sm text-[#8A4B4B] ring-1 ring-[#EBCACA]">
                   <span className="font-medium">{t.staff_name}</span> · หยุด{TIME_OFF_LABELS[t.period]}
+                  {t.cover_name ? <span> · ฝากงาน {t.cover_name}</span> : null}
                   {t.note ? <span className="text-[#B07A7A]"> ({t.note})</span> : null}
                 </span>
               ))}

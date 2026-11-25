@@ -35,6 +35,7 @@ export type Appointment = {
   survey_latitude?: number | null; // ตำแหน่งของลูกค้าที่ผูกไว้
   survey_longitude?: number | null;
   survey_map_url?: string | null;
+  cover_name?: string | null; // คนที่รับฝากงานแทนผู้รับผิดชอบ (ผู้รับผิดชอบหยุดวันนั้น)
   customer_code?: string | null; // รหัสลูกค้า (ถ้างานผูกกับลูกค้า)
   sales_name?: string | null; // เซลที่ดูแลลูกค้า
   survey_fee?: string | number | null; // ค่าสำรวจ (บาท)
@@ -85,7 +86,16 @@ export const TIME_OFF_LABELS: Record<TimeOffPeriod, string> = {
   morning: "ครึ่งเช้า",
   afternoon: "ครึ่งบ่าย",
 };
-export type TimeOff = { id: number; staff_id: number; staff_name?: string; off_date: string; period: TimeOffPeriod; note: string | null };
+export type TimeOff = {
+  id: number;
+  staff_id: number;
+  staff_name?: string;
+  off_date: string;
+  period: TimeOffPeriod;
+  note: string | null;
+  cover_staff_id?: number | null; // ฝากงานให้ใคร
+  cover_name?: string | null;
+};
 
 // ชื่อเรียกคนที่ได้รับมอบหมาย ตามประเภทงาน
 export const ASSIGNEE_LABELS: Record<AppointmentType, string> = {
@@ -98,7 +108,7 @@ export const ASSIGNEE_LABELS: Record<AppointmentType, string> = {
 export function jobPeople(a: Appointment) {
   const parts: string[] = [];
   if (a.sales_name) parts.push(`เซล: ${a.sales_name}`);
-  parts.push(`${ASSIGNEE_LABELS[a.type]}: ${a.assigned_staff_name || "ยังไม่ระบุ"}`);
+  parts.push(`${ASSIGNEE_LABELS[a.type]}: ${a.assigned_staff_name || "ยังไม่ระบุ"}${a.cover_name ? ` (หยุด — แทนโดย ${a.cover_name})` : ""}`);
   return parts.join(" · ");
 }
 

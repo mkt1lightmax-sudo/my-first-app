@@ -13,8 +13,9 @@ router.get("/", requireAuth, async (req, res) => {
   const { from, to } = req.query;
   if (!isDate(from) || !isDate(to)) return res.status(400).json({ ok: false, error: "from / to ต้องเป็น YYYY-MM-DD" });
   const r = await query(
-    `SELECT t.id, t.staff_id, s.name AS staff_name, t.off_date::text AS off_date, t.period, t.note
-     FROM staff_time_off t JOIN staff s ON s.id = t.staff_id
+    `SELECT t.id, t.staff_id, s.name AS staff_name, t.off_date::text AS off_date, t.period, t.note,
+            t.cover_staff_id, cv.name AS cover_name
+     FROM staff_time_off t JOIN staff s ON s.id = t.staff_id LEFT JOIN staff cv ON cv.id = t.cover_staff_id
      WHERE t.off_date BETWEEN $1 AND $2
      ORDER BY t.off_date, s.name`,
     [from, to]
@@ -32,11 +33,14 @@ router.post("/", requireAuth, async (req, res) => {
   if (staffId !== req.staff.id && !can(req.staff, "timeoff.manageAll")) {
     return res.status(403).json({ ok: false, error: "แจ้งหยุดแทนคนอื่นไม่ได้" });
   }
+  // ฝากงานให้ (ถ้ามี) — ต้องไม่ใช่ตัวเอง
+  const coverId = req.body?.cover_staff_id ? Number(req.body.cover_staff_id) : null;
+  if (coverId && coverId === staffId) return res.status(400).json({ ok: false, error: "ฝากงานให้ตัวเองไม่ได้" });
   const r = await query(
-    `INSERT INTO staff_time_off (staff_id, off_date, period, note, created_by) VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (staff_id, off_date) DO UPDATE SET period = EXCLUDED.period, note = EXCLUDED.note
-     RETURNING id, staff_id, off_date::text AS off_date, period, note`,
-    [staffId, off_date, period, note || null, req.staff.id]
+    `INSERT INTO staff_time_off (staff_id, off_date, period, note, created_by, cover_staff_id) VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (staff_id, off_date) DO UPDATE SET period = EXCLUDED.period, note = EXCLUDED.note, cover_staff_id = EXCLUDED.cover_staff_id
+     RETURNING id, staff_id, off_date::text AS off_date, period, note, cover_staff_id`,
+    [staffId, off_date, period, note || null, req.staff.id, coverId]
   );
   res.json({ ok: true, timeOff: r.rows[0] });
 });

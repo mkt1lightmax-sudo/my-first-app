@@ -17,8 +17,8 @@ function parseLatLng(body) {
 async function canUpdateSurveyLocation(staff, surveyId) {
   if (can(staff, "location.update")) return true;
   const r = await query(
-    "SELECT 1 FROM appointments WHERE survey_id = $1 AND assigned_staff_id = $2 AND status <> 'cancelled' LIMIT 1",
-    [surveyId, staff.id]
+    "SELECT 1 FROM appointments WHERE survey_id = $1 AND assigned_staff_id = ANY($2) AND status <> 'cancelled' LIMIT 1",
+    [surveyId, [staff.id, ...(staff.coveringIds || [])]]
   );
   return r.rows.length > 0;
 }

@@ -33,6 +33,13 @@ async function requireAuth(req, res, next) {
   }
 
   delete staff.password_changed_at;
+  // ฝากงานระหว่างหยุด: วันนี้ฉันรับฝากงานของใครบ้าง (หมดเองเมื่อพ้นวันหยุด)
+  staff.coveringIds = (
+    await query(
+      "SELECT staff_id FROM staff_time_off WHERE cover_staff_id = $1 AND off_date = (now() AT TIME ZONE 'Asia/Bangkok')::date",
+      [staff.id]
+    )
+  ).rows.map((r) => r.staff_id);
   req.staff = staff;
 
   // ต่ออายุการล็อกอิน: ใช้งานอยู่ = นับ 90 วันใหม่ (ออก cookie ใหม่วันละครั้งพอ)

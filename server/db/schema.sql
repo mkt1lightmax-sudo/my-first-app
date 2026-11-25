@@ -394,3 +394,7 @@ ALTER TABLE surveys ADD CONSTRAINT surveys_status_check CHECK (status IN ('new',
 ALTER TABLE surveys ADD COLUMN IF NOT EXISTS sales_staff_id INTEGER REFERENCES staff(id) ON DELETE SET NULL;
 UPDATE surveys SET sales_staff_id = created_by WHERE sales_staff_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_surveys_sales_staff ON surveys(sales_staff_id);
+
+-- ฝากงานระหว่างหยุด: คนที่รับฝากจะเห็น/ตอบแชท และแก้ลูกค้าของคนที่หยุดได้เฉพาะวันนั้น (หมดเองอัตโนมัติ)
+ALTER TABLE staff_time_off ADD COLUMN IF NOT EXISTS cover_staff_id INTEGER REFERENCES staff(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_staff_time_off_cover ON staff_time_off(cover_staff_id, off_date);

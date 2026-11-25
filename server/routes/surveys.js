@@ -87,8 +87,10 @@ function cleanMapUrl(v) {
 async function canEditSurvey(staff, survey) {
   if (can(staff, "customers.editAll")) return true;
   if (!can(staff, "customers.edit")) return false;
-  if (survey.created_by === staff.id || survey.sales_staff_id === staff.id) return true;
-  const r = await query("SELECT 1 FROM appointments WHERE survey_id = $1 AND assigned_staff_id = $2 LIMIT 1", [survey.id, staff.id]);
+  // รวมลูกค้าของคนที่ฉันรับฝากงานวันนี้
+  const ids = [staff.id, ...(staff.coveringIds || [])];
+  if (ids.includes(survey.created_by) || ids.includes(survey.sales_staff_id)) return true;
+  const r = await query("SELECT 1 FROM appointments WHERE survey_id = $1 AND assigned_staff_id = ANY($2) LIMIT 1", [survey.id, ids]);
   return r.rows.length > 0;
 }
 const NOT_YOURS = { ok: false, error: "แก้ได้เฉพาะลูกค้าที่คุณสร้างหรือได้รับมอบหมาย — ถ้าต้องแก้ ติดต่อแอดมิน" };

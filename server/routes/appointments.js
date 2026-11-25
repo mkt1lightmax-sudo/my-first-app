@@ -259,12 +259,16 @@ router.get("/", requireAuth, async (req, res) => {
   const result = await query(
     `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
             sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name,
-            sv.latitude AS survey_latitude, sv.longitude AS survey_longitude, sv.map_url AS survey_map_url
+            sv.latitude AS survey_latitude, sv.longitude AS survey_longitude, sv.map_url AS survey_map_url,
+            cv.name AS cover_name
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
      LEFT JOIN staff cs ON cs.id = sv.sales_staff_id
      LEFT JOIN staff fp ON fp.id = a.survey_fee_paid_by
+     LEFT JOIN staff_time_off tof ON tof.staff_id = a.assigned_staff_id AND tof.cover_staff_id IS NOT NULL
+          AND tof.off_date = (a.scheduled_start AT TIME ZONE 'Asia/Bangkok')::date
+     LEFT JOIN staff cv ON cv.id = tof.cover_staff_id
      ${where}
      ORDER BY a.scheduled_start ASC`,
     params
@@ -276,12 +280,16 @@ router.get("/:id", requireAuth, async (req, res) => {
   const result = await query(
     `SELECT a.*, s.name AS assigned_staff_name, s.role AS assigned_staff_role,
             sv.customer_code, cs.name AS sales_name, fp.name AS survey_fee_paid_by_name,
-            sv.latitude AS survey_latitude, sv.longitude AS survey_longitude, sv.map_url AS survey_map_url
+            sv.latitude AS survey_latitude, sv.longitude AS survey_longitude, sv.map_url AS survey_map_url,
+            cv.name AS cover_name
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
      LEFT JOIN staff cs ON cs.id = sv.sales_staff_id
      LEFT JOIN staff fp ON fp.id = a.survey_fee_paid_by
+     LEFT JOIN staff_time_off tof ON tof.staff_id = a.assigned_staff_id AND tof.cover_staff_id IS NOT NULL
+          AND tof.off_date = (a.scheduled_start AT TIME ZONE 'Asia/Bangkok')::date
+     LEFT JOIN staff cv ON cv.id = tof.cover_staff_id
      WHERE a.id = $1`,
     [req.params.id]
   );
@@ -291,7 +299,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   const a = result.rows[0];
   const canUpdateLocation = a.survey_id
     ? await location.canUpdateSurveyLocation(req.staff, a.survey_id)
-    : can(req.staff, "location.update") || a.assigned_staff_id === req.staff.id;
+    : can(req.staff, "location.update") || [req.staff.id, ...(req.staff.coveringIds || [])].includes(a.assigned_staff_id);
   res.json({ ok: true, appointment: a, canUpdateLocation });
 });
 
@@ -301,7 +309,7 @@ router.put("/:id/location", requireAuth, async (req, res) => {
   if (!a) return res.status(404).json({ ok: false, error: "appointment not found" });
   const allowed = a.survey_id
     ? await location.canUpdateSurveyLocation(req.staff, a.survey_id)
-    : can(req.staff, "location.update") || a.assigned_staff_id === req.staff.id;
+    : can(req.staff, "location.update") || [req.staff.id, ...(req.staff.coveringIds || [])].includes(a.assigned_staff_id);
   if (!allowed) return res.status(403).json({ ok: false, error: "อัปเดตตำแหน่งได้เฉพาะแอดมิน หรือช่างที่ได้รับมอบหมายงานนี้" });
   const p = location.parseLatLng(req.body);
   if (!p) return res.status(400).json({ ok: false, error: "พิกัดไม่ถูกต้อง" });

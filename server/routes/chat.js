@@ -5,10 +5,13 @@ const { requireAuth } = require("../middleware/auth");
 const { can, requirePermission, requireOwner } = require("../lib/permissions");
 
 // เซลล์เห็นเฉพาะแชทที่ตัวเองดูแล + ที่ยังไม่มีคนดูแล
+// รวมคนที่ฉันรับฝากงานวันนี้ (ฝากงานระหว่างหยุด)
+const myIds = (staff) => [staff.id, ...(staff.coveringIds || [])];
+
 function canSeeConvo(staff, convo) {
   return (
     can(staff, "chat.viewAll") ||
-    convo.assigned_staff_id === staff.id ||
+    myIds(staff).includes(convo.assigned_staff_id) ||
     (convo.assigned_staff_id === null && can(staff, "chat.seeUnassigned"))
   );
 }
@@ -16,7 +19,10 @@ function canSeeConvo(staff, convo) {
 // เงื่อนไข SQL ของแชทที่คนนี้เห็น (ใช้คู่กับ $n ที่เป็น id ของคนนี้) — ผู้สำรวจเห็นเฉพาะที่มอบหมายให้ตัวเอง
 function visibleScope(staff, col, placeholder) {
   if (can(staff, "chat.viewAll")) return null;
-  return can(staff, "chat.seeUnassigned") ? `(${col} IS NULL OR ${col} = ${placeholder})` : `${col} = ${placeholder}`;
+  // แชทของคนที่ฉันรับฝาก (เลขรหัสพนักงานล้วน จึงใส่ใน SQL ตรงๆ ได้อย่างปลอดภัย)
+  const cover = (staff.coveringIds || []).map(Number).filter(Number.isInteger);
+  const mine = cover.length ? `(${col} = ${placeholder} OR ${col} IN (${cover.join(",")}))` : `${col} = ${placeholder}`;
+  return can(staff, "chat.seeUnassigned") ? `(${col} IS NULL OR ${mine})` : mine;
 }
 const NOT_YOURS = { ok: false, error: "แชทนี้มีพนักงานคนอื่นดูแลอยู่" };
 const line = require("../lib/line");
@@ -262,7 +268,16 @@ async function notifyNewMessage(conversationId, account, text) {
   ).rows[0];
   if (!c || c.is_spam) return;
   const recipients = c.assigned_staff_id
-    ? [c.assigned_staff_id]
+    ? [
+        c.assigned_staff_id,
+        // คนที่รับฝากงานของผู้ดูแลวันนี้ ได้แจ้งเตือนด้วย
+        ...(
+          await query(
+            "SELECT cover_staff_id FROM staff_time_off WHERE staff_id = $1 AND cover_staff_id IS NOT NULL AND off_date = (now() AT TIME ZONE 'Asia/Bangkok')::date",
+            [c.assigned_staff_id]
+          )
+        ).rows.map((r) => r.cover_staff_id),
+      ]
     : (await query("SELECT id FROM staff WHERE is_owner OR role IN ('admin', 'assistant', 'sales')")).rows.map((r) => r.id);
   const preview = String(text || "").replace(/\s+/g, " ").slice(0, 120);
   await push.sendToStaff(recipients, {

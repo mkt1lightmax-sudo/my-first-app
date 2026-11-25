@@ -23,6 +23,7 @@ export default function TimeOffPage() {
   const [date, setDate] = useState(keyOf(new Date()));
   const [period, setPeriod] = useState<TimeOffPeriod>("full");
   const [note, setNote] = useState("");
+  const [coverId, setCoverId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +38,7 @@ export default function TimeOffPage() {
 
   useEffect(() => {
     load();
-    if (manageAll) api.get<{ ok: true; staff: StaffOption[] }>("/staff").then((d) => setStaffList(d.staff)).catch(() => {});
+    api.get<{ ok: true; staff: StaffOption[] }>("/staff").then((d) => setStaffList(d.staff)).catch(() => {});
   }, [manageAll]);
 
   async function handleSubmit(e: FormEvent) {
@@ -45,8 +46,15 @@ export default function TimeOffPage() {
     setError(null);
     setSaving(true);
     try {
-      await api.post("/time-off", { off_date: date, period, note: note || undefined, staff_id: Number(staffId) || undefined });
+      await api.post("/time-off", {
+        off_date: date,
+        period,
+        note: note || undefined,
+        staff_id: Number(staffId) || undefined,
+        cover_staff_id: coverId ? Number(coverId) : undefined,
+      });
       setNote("");
+      setCoverId("");
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "บันทึกไม่สำเร็จ");
@@ -113,6 +121,22 @@ export default function TimeOffPage() {
           <p className="mt-1 text-xs text-gray-400">ครึ่งเช้า = ก่อน 12:00 · ครึ่งบ่าย = ตั้งแต่ 13:00</p>
         </div>
         <div>
+          <label className="mb-1 block text-sm text-gray-700">ฝากงานให้ (ถ้ามี)</label>
+          <select value={coverId} onChange={(e) => setCoverId(e.target.value)} className={inputClass}>
+            <option value="">ไม่ฝาก</option>
+            {staffList
+              .filter((s) => String(s.id) !== String(staffId))
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-400">
+            วันที่หยุด คนที่รับฝากจะเห็น/ตอบแชท แก้ลูกค้า และได้แจ้งเตือนแทน — หมดเองอัตโนมัติเมื่อพ้นวันหยุด
+          </p>
+        </div>
+        <div>
           <label className="mb-1 block text-sm text-gray-700">หมายเหตุ (ถ้ามี)</label>
           <input value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} />
         </div>
@@ -133,6 +157,7 @@ export default function TimeOffPage() {
               </div>
               <div className="text-xs text-gray-500">
                 {t.staff_name}
+                {t.cover_name ? ` · ฝากงานให้ ${t.cover_name}` : ""}
                 {t.note ? ` · ${t.note}` : ""}
               </div>
             </div>
