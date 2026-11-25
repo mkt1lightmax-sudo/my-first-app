@@ -16,6 +16,7 @@ type SurveyRow = {
   recommended_kwp: string | null;
   created_at: string;
   created_by_name: string | null;
+  sales_name: string | null;
 };
 
 type Creator = { id: number; name: string; count: number };
@@ -35,7 +36,7 @@ export default function SurveyListPage() {
       const p = new URLSearchParams();
       if (search.trim()) p.set("q", search.trim());
       if (status) p.set("status", status);
-      if (creatorId) p.set("created_by", creatorId);
+      if (creatorId) p.set("sales_staff_id", creatorId);
       api
         .get<{ ok: true; surveys: SurveyRow[]; creators?: Creator[] }>(`/surveys${p.size ? `?${p}` : ""}`)
         .then((data) => {
@@ -91,7 +92,7 @@ export default function SurveyListPage() {
       {/* กรองตามผู้สร้าง (เจ้าของ / แอดมิน / ผู้ช่วยแอดมิน) */}
       {creators.length > 0 && (
         <div className="mb-3 flex items-center gap-2 text-sm">
-          <span className="text-xs text-gray-400">ผู้สร้าง / เซล:</span>
+          <span className="text-xs text-gray-400">เซลผู้ดูแล:</span>
           <select value={creatorId} onChange={(e) => setCreatorId(e.target.value)} className="rounded-full border bg-white px-3 py-1 text-sm">
             <option value="">ทุกคน</option>
             {creators.map((c) => (
@@ -120,7 +121,10 @@ export default function SurveyListPage() {
               </div>
               <div className="mt-0.5 text-xs text-gray-500">
                 {s.customer_phone ?? "ไม่มีเบอร์โทร"} · {new Date(s.created_at).toLocaleDateString("th-TH")}
-                {s.created_by_name && <span className="text-brand-navy"> · สร้างโดย {s.created_by_name}</span>}
+              </div>
+              <div className="mt-0.5 text-xs text-gray-500">
+                <span className="text-brand-navy">เซล: {s.sales_name || "ยังไม่ระบุ"}</span>
+                {s.created_by_name && s.created_by_name !== s.sales_name && <span> · สร้างโดย {s.created_by_name}</span>}
               </div>
               {s.recommended_kwp && <div className="mt-1 text-sm font-medium text-brand-navy">{formatNumber(s.recommended_kwp)} kWp</div>}
             </div>

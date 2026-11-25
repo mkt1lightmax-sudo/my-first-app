@@ -261,7 +261,7 @@ router.get("/", requireAuth, async (req, res) => {
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
-     LEFT JOIN staff cs ON cs.id = COALESCE(sv.created_by, a.created_by)
+     LEFT JOIN staff cs ON cs.id = sv.sales_staff_id
      LEFT JOIN staff fp ON fp.id = a.survey_fee_paid_by
      ${where}
      ORDER BY a.scheduled_start ASC`,
@@ -277,7 +277,7 @@ router.get("/:id", requireAuth, async (req, res) => {
      FROM appointments a
      LEFT JOIN staff s ON s.id = a.assigned_staff_id
      LEFT JOIN surveys sv ON sv.id = a.survey_id
-     LEFT JOIN staff cs ON cs.id = COALESCE(sv.created_by, a.created_by)
+     LEFT JOIN staff cs ON cs.id = sv.sales_staff_id
      LEFT JOIN staff fp ON fp.id = a.survey_fee_paid_by
      WHERE a.id = $1`,
     [req.params.id]

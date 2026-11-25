@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { can } from "../../lib/permissions";
 import { api, ApiError } from "../../lib/api";
 import {
   ROOF_DIRECTIONS,
@@ -86,6 +88,18 @@ export default function SurveyFormPage() {
   const isEditing = Boolean(id);
   const [mapUrl, setMapUrl] = useState("");
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  // เซลผู้ดูแล (แอดมิน / ผู้ช่วยแอดมินเลือกได้)
+  const { staff: me } = useAuth();
+  const canAssignSales = can(me, "customers.assignSales");
+  const [salesStaffId, setSalesStaffId] = useState("");
+  const [salesOptions, setSalesOptions] = useState<{ id: number; name: string; role: string }[]>([]);
+  useEffect(() => {
+    if (!canAssignSales) return;
+    api
+      .get<{ ok: true; staff: { id: number; name: string; role: string }[] }>("/staff")
+      .then((d) => setSalesOptions(d.staff.filter((x) => ["sales", "admin", "assistant"].includes(x.role))))
+      .catch(() => {});
+  }, [canAssignSales]);
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; phone?: string; place?: string }>({});
 
   // ข้อมูลลูกค้า
@@ -157,6 +171,7 @@ export default function SurveyFormPage() {
         setCustomerPhone(str(v.customer_phone));
         setCustomerAddress(str(v.customer_address));
         setMapUrl(str(v.map_url));
+        setSalesStaffId(v.sales_staff_id ? String(v.sales_staff_id) : "");
         if (v.latitude != null && v.longitude != null) setPin({ lat: Number(v.latitude), lng: Number(v.longitude) });
         setSiteType(v.site_type ?? "");
         setSiteTypeOther(str(v.site_type_other));
@@ -242,6 +257,7 @@ export default function SurveyFormPage() {
         customer_phone: customerPhone.replace(/[\s-]/g, ""),
         customer_address: customerAddress || undefined,
         map_url: mapUrl.trim() || undefined,
+        ...(canAssignSales ? { sales_staff_id: salesStaffId ? Number(salesStaffId) : null } : {}),
         latitude: pin?.lat,
         longitude: pin?.lng,
 
@@ -346,6 +362,20 @@ export default function SurveyFormPage() {
             />
             {fieldErrors.place && <p className="mt-1 text-xs text-red-600">{fieldErrors.place}</p>}
           </div>
+          {canAssignSales && (
+            <div>
+              <label className={labelClass}>เซลผู้ดูแล</label>
+              <select value={salesStaffId} onChange={(e) => setSalesStaffId(e.target.value)} className={inputClass}>
+                <option value="">ยังไม่ระบุ</option>
+                {salesOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                    {o.role !== "sales" ? " (แอดมิน)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className={labelClass}>ปักหมุดตำแหน่ง</label>
             <MapPinPicker

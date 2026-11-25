@@ -77,6 +77,25 @@ export default function SurveyDetailPage() {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinMsg, setPinMsg] = useState<string | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
+  // เปลี่ยนเซลผู้ดูแล (แอดมิน / ผู้ช่วยแอดมิน)
+  const canAssignSales = can(staff, "customers.assignSales");
+  const [salesOptions, setSalesOptions] = useState<{ id: number; name: string; role: string }[]>([]);
+  useEffect(() => {
+    if (!canAssignSales) return;
+    api
+      .get<{ ok: true; staff: { id: number; name: string; role: string }[] }>("/staff")
+      .then((d) => setSalesOptions(d.staff.filter((x) => ["sales", "admin", "assistant"].includes(x.role))))
+      .catch(() => {});
+  }, [canAssignSales]);
+
+  async function changeSales(value: string) {
+    if (!survey) return;
+    const name = salesOptions.find((o) => String(o.id) === value)?.name || "ยังไม่ระบุ";
+    if (!window.confirm(`เปลี่ยนเซลผู้ดูแลลูกค้ารายนี้เป็น "${name}"?`)) return;
+    await api.patch(`/surveys/${id}`, { sales_staff_id: value ? Number(value) : null });
+    load();
+    setHistory(null);
+  }
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [calculation, setCalculation] = useState<SolarCalcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +199,28 @@ export default function SurveyDetailPage() {
         <Link to="/surveys" className="text-sm text-brand-navy hover:underline">
           ← กลับไปรายการแบบสำรวจ
         </Link>
+      </div>
+
+      {/* เซลผู้ดูแล / ผู้สร้าง */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-white p-3 text-sm">
+        <span className="text-gray-500">เซลผู้ดูแล:</span>
+        {canAssignSales ? (
+          <select
+            value={survey.sales_staff_id ? String(survey.sales_staff_id) : ""}
+            onChange={(e) => changeSales(e.target.value)}
+            className="rounded-lg border px-2 py-1 text-sm text-brand-navy"
+          >
+            <option value="">ยังไม่ระบุ</option>
+            {salesOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="font-medium text-brand-navy">{typeof survey.sales_name === "string" ? survey.sales_name : "ยังไม่ระบุ"}</span>
+        )}
+        {typeof survey.created_by_name === "string" && <span className="text-xs text-gray-400">· สร้างโดย {survey.created_by_name}</span>}
       </div>
 
       {/* สถานะตามขั้นตอนการขาย */}
@@ -586,6 +627,7 @@ const FIELD_LABELS: Record<string, string> = {
   customer_phone: "เบอร์โทร",
   customer_address: "ที่อยู่",
   map_url: "ลิงก์แผนที่",
+  sales_staff_id: "เซลผู้ดูแล",
   monthly_bill_thb: "ค่าไฟ/เดือน",
   monthly_usage_kwh: "หน่วยไฟ/เดือน",
   roof_area_sqm: "พื้นที่หลังคา",

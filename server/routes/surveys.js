@@ -12,6 +12,7 @@ const EDITABLE_FIELDS = [
   "customer_phone",
   "customer_address",
   "map_url",
+  "sales_staff_id",
   "latitude",
   "longitude",
   // หมวด 1: ประเภทสถานที่
@@ -85,7 +86,7 @@ function cleanMapUrl(v) {
 async function canEditSurvey(staff, survey) {
   if (can(staff, "customers.editAll")) return true;
   if (!can(staff, "customers.edit")) return false;
-  if (survey.created_by === staff.id) return true;
+  if (survey.created_by === staff.id || survey.sales_staff_id === staff.id) return true;
   const r = await query("SELECT 1 FROM appointments WHERE survey_id = $1 AND assigned_staff_id = $2 LIMIT 1", [survey.id, staff.id]);
   return r.rows.length > 0;
 }
@@ -169,6 +170,9 @@ router.post("/", requireAuth, requirePermission("customers.create"), async (req,
   if ("map_url" in req.body) req.body.map_url = cleanMapUrl(req.body.map_url);
   const invalid = validateRequired(req.body);
   if (invalid) return res.status(400).json({ ok: false, error: invalid });
+  // เซลผู้ดูแล: แอดมิน/ผู้ช่วยแอดมินเลือกได้ — คนอื่นถ้าเป็นเซลจะเป็นของตัวเอง
+  if (can(req.staff, "customers.assignSales") && req.body.sales_staff_id) req.body.sales_staff_id = Number(req.body.sales_staff_id);
+  else req.body.sales_staff_id = req.staff.role === "sales" ? req.staff.id : null;
 
   const calc = tryCalculate(req.body);
 
@@ -217,14 +221,20 @@ router.get("/", requireAuth, async (req, res) => {
     params.push(`%${String(req.query.q).trim()}%`);
     conditions.push(`(customer_code ILIKE $${params.length} OR customer_name ILIKE $${params.length} OR customer_phone ILIKE $${params.length})`);
   }
+  if (req.query.sales_staff_id) {
+    params.push(req.query.sales_staff_id);
+    conditions.push(`sales_staff_id = $${params.length}`);
+  }
   if (req.query.created_by) {
     params.push(req.query.created_by);
     conditions.push(`created_by = $${params.length}`);
   }
 
-  const where = `WHERE ${conditions.map((c) => c.replace(/\b(deleted_at|status|created_by|customer_code|customer_name|customer_phone)\b/g, "s.$1")).join(" AND ")}`;
+  const where = `WHERE ${conditions.map((c) => c.replace(/\b(deleted_at|status|created_by|sales_staff_id|customer_code|customer_name|customer_phone)\b/g, "s.$1")).join(" AND ")}`;
   const result = await query(
-    `SELECT s.*, st.name AS created_by_name FROM surveys s LEFT JOIN staff st ON st.id = s.created_by ${where} ORDER BY s.created_at DESC`,
+    `SELECT s.*, st.name AS created_by_name, ss.name AS sales_name
+     FROM surveys s LEFT JOIN staff st ON st.id = s.created_by LEFT JOIN staff ss ON ss.id = s.sales_staff_id
+     ${where} ORDER BY s.created_at DESC`,
     params
   );
 
@@ -234,7 +244,7 @@ router.get("/", requireAuth, async (req, res) => {
     creators = (
       await query(
         `SELECT st.id, st.name, COUNT(s.id)::int AS count
-         FROM surveys s JOIN staff st ON st.id = s.created_by
+         FROM surveys s JOIN staff st ON st.id = s.sales_staff_id
          WHERE s.deleted_at IS NULL GROUP BY st.id, st.name ORDER BY count DESC, st.name`
       )
     ).rows;
@@ -271,11 +281,31 @@ router.get("/:id/history", requireAuth, async (req, res) => {
      WHERE h.survey_id = $1 ORDER BY h.created_at DESC LIMIT 100`,
     [req.params.id]
   );
+  // เปลี่ยนเซลผู้ดูแล: แสดงเป็นชื่อแทนเลขรหัส
+  const ids = new Set();
+  for (const h of r.rows) {
+    const c = h.changes?.sales_staff_id;
+    if (c) [c.from, c.to].forEach((v) => v && ids.add(Number(v)));
+  }
+  if (ids.size) {
+    const names = Object.fromEntries(
+      (await query("SELECT id, name FROM staff WHERE id = ANY($1)", [[...ids]])).rows.map((x) => [x.id, x.name])
+    );
+    for (const h of r.rows) {
+      const c = h.changes?.sales_staff_id;
+      if (c) h.changes.sales_staff_id = { from: names[c.from] ?? c.from, to: names[c.to] ?? c.to };
+    }
+  }
   res.json({ ok: true, history: r.rows });
 });
 
 router.get("/:id", requireAuth, async (req, res) => {
-  const result = await query("SELECT * FROM surveys WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+  const result = await query(
+    `SELECT s.*, st.name AS created_by_name, ss.name AS sales_name
+     FROM surveys s LEFT JOIN staff st ON st.id = s.created_by LEFT JOIN staff ss ON ss.id = s.sales_staff_id
+     WHERE s.id = $1 AND s.deleted_at IS NULL`,
+    [req.params.id]
+  );
   const survey = result.rows[0];
   if (!survey) {
     return res.status(404).json({ ok: false, error: "survey not found" });
@@ -302,6 +332,13 @@ router.patch("/:id", requireAuth, requirePermission("customers.edit"), async (re
   }
   if (!(await canEditSurvey(req.staff, existing.rows[0]))) return res.status(403).json(NOT_YOURS);
   if ("map_url" in req.body) req.body.map_url = cleanMapUrl(req.body.map_url);
+  if ("sales_staff_id" in req.body) {
+    const next = req.body.sales_staff_id ? Number(req.body.sales_staff_id) : null;
+    if (next !== existing.rows[0].sales_staff_id && !can(req.staff, "customers.assignSales")) {
+      return res.status(403).json({ ok: false, error: "เปลี่ยนเซลผู้ดูแลได้เฉพาะแอดมินและผู้ช่วยแอดมิน" });
+    }
+    req.body.sales_staff_id = next;
+  }
 
   const merged = { ...existing.rows[0], ...req.body };
   // แก้ข้อมูลติดต่อ → ต้องยังครบตามช่องบังคับ
