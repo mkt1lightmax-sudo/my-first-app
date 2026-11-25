@@ -65,7 +65,16 @@ function isStandardSlot(start, end) {
   return SLOT_TIMES.includes(hhmm(s)) && new Date(end).getTime() - s.getTime() === SURVEY_HOURS * HOUR;
 }
 
+// เวลาทำงาน 08:00–18:00: เริ่มไม่ก่อน 08:00 และจบไม่เกิน 18:00 (เวลาไทย) — คืนข้อความ error หรือ null
+function workHoursError(start, end) {
+  if (hhmm(start) < "08:00" || hhmm(start) > "17:30") return "เวลาเริ่มต้องอยู่ระหว่าง 08:00–17:30";
+  if (hhmm(end) > "18:00" || hhmm(end) < "08:30") return "เวลาจบต้องอยู่ระหว่าง 08:30–18:00";
+  if (new Date(end) <= new Date(start)) return "เวลาสิ้นสุดต้องหลังเวลาเริ่ม";
+  return null;
+}
+
 module.exports = {
+  workHoursError,
   SLOT_TIMES,
   SURVEY_HOURS,
   at,

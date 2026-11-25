@@ -123,6 +123,8 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
   if (!req.body.assigned_staff_id) missing.push("ผู้รับผิดชอบ");
   if (missing.length) return res.status(400).json({ ok: false, error: `กรุณากรอก: ${missing.join(", ")}` });
   const mapUrl = /^https?:\/\//i.test(String(req.body.map_url || "").trim()) ? String(req.body.map_url).trim() : null;
+  const hoursError = slots.workHoursError(scheduled_start, scheduled_end);
+  if (hoursError) return res.status(400).json({ ok: false, error: hoursError });
 
   const slotError = await checkSurveyBooking(req.staff, { ...req.body, status: req.body.status ?? "scheduled" }, { override: req.body.override });
   if (slotError) return res.status(409).json({ ok: false, error: slotError });
@@ -234,6 +236,13 @@ router.patch("/:id", requireAuth, async (req, res) => {
   const scheduleChanged = ["type", "scheduled_start", "scheduled_end", "assigned_staff_id", "status"].some(
     (f) => f in req.body && norm(f, req.body[f]) !== norm(f, existing.rows[0][f])
   );
+  // เปลี่ยนเวลา → ต้องอยู่ในเวลาทำงาน 08:00–18:00
+  const timeChanged = ["scheduled_start", "scheduled_end"].some((f) => f in req.body && norm(f, req.body[f]) !== norm(f, existing.rows[0][f]));
+  if (timeChanged) {
+    const m = { ...existing.rows[0], ...req.body };
+    const hoursError = slots.workHoursError(m.scheduled_start, m.scheduled_end);
+    if (hoursError) return res.status(400).json({ ok: false, error: hoursError });
+  }
   if (scheduleChanged) {
     const merged = { ...existing.rows[0], ...req.body };
     const slotError = await checkSurveyBooking(req.staff, merged, { override: req.body.override, excludeId: existing.rows[0].id });

@@ -191,13 +191,18 @@ export default function CalendarPage() {
                     <span className="font-medium text-gray-900">{dayTimeLabel(a, selectedDate)}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${APPOINTMENT_TYPE_STYLES[a.type].badge}`}>
                       {APPOINTMENT_TYPE_LABELS[a.type]}
-                      {dayIndexLabel(a, selectedDate)}
                     </span>
+                    {dayIndexLabel(a, selectedDate) && (
+                      <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600">{dayIndexLabel(a, selectedDate)}</span>
+                    )}
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${APPOINTMENT_STATUS_COLORS[a.status]}`}>
                       {APPOINTMENT_STATUS_LABELS[a.status]}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-xs text-gray-500">{a.customer_name}</div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    {spanLabel(a) && <span className="font-medium text-gray-600">{spanLabel(a)} · </span>}
+                    {a.customer_name}
+                  </div>
                 </div>
                 <ChevronRightIcon className="h-5 w-5 flex-shrink-0 text-gray-300" />
               </Link>
@@ -223,13 +228,22 @@ function dayParts(a: Appointment, key: string) {
 
 function dayIndexLabel(a: Appointment, key: string) {
   const { total, index } = dayParts(a, key);
-  return total > 1 ? ` · วันที่ ${index}/${total}` : "";
+  return total > 1 ? `วันที่ ${index} จาก ${total} วัน` : "";
 }
 
-// เวลาที่แสดงในแต่ละวัน: วันแรก = เวลาเริ่ม, วันสุดท้าย = "ถึง HH:MM", วันกลาง = "ทั้งวัน"
+// ช่วงวันของทั้งงาน (เฉพาะงานหลายวัน) เช่น "งาน 24–25 พ.ย."
+function spanLabel(a: Appointment) {
+  const s = new Date(a.scheduled_start);
+  const e = new Date(a.scheduled_end);
+  if (dateKey(s) === dateKey(e)) return "";
+  const month = (d: Date) => d.toLocaleDateString("th-TH", { month: "short" });
+  return month(s) === month(e) ? `งาน ${s.getDate()}–${e.getDate()} ${month(e)}` : `งาน ${s.getDate()} ${month(s)} – ${e.getDate()} ${month(e)}`;
+}
+
+// เวลาของวันนั้นเป็นช่วงเสมอ: วันแรก เริ่ม–18:00 / วันกลาง 08:00–18:00 / วันสุดท้าย 08:00–เวลาจบ
 function dayTimeLabel(a: Appointment, key: string) {
   const { total, index } = dayParts(a, key);
-  if (total <= 1 || index === 1) return formatTime(a.scheduled_start);
-  if (index === total) return `ถึง ${formatTime(a.scheduled_end)}`;
-  return "ทั้งวัน";
+  const from = total <= 1 || index === 1 ? formatTime(a.scheduled_start) : "08:00";
+  const to = total <= 1 || index === total ? formatTime(a.scheduled_end) : "18:00";
+  return `${from} – ${to}`;
 }

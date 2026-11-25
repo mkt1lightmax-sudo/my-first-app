@@ -27,9 +27,8 @@ function isStandardSurvey(startIso: string, endIso: string) {
   return SLOT_TIMES.includes(hhmm) && new Date(endIso).getTime() - s.getTime() === 2 * 60 * 60 * 1000;
 }
 
-// เวลาทำงาน: เริ่ม 08:00 เลิก 18:00
-const WORK_START = "08:00";
-const WORK_END = "18:00";
+// เวลาทำงาน: เริ่ม 08:00 เลิก 18:00 (ช่องเวลาเลือกได้แค่ช่วงนี้)
+import WorkDateTimeField, { WORK_START, WORK_END } from "./WorkDateTimeField";
 
 const todayKey = () => {
   const d = new Date();
@@ -307,16 +306,10 @@ export default function AppointmentFormPage() {
         )}
 
         {!useSlots && (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>วันเวลาเริ่ม *</label>
-            <input type="datetime-local" required value={start} onChange={(e) => handleStartChange(e.target.value)} className={inputClass} />
-          </div>
-          <div>
-            <label className={labelClass}>วันเวลาสิ้นสุด *</label>
-            <input type="datetime-local" required value={end} onChange={(e) => setEnd(e.target.value)} className={inputClass} />
-          </div>
-          <p className="col-span-2 -mt-2 text-xs text-gray-400">เวลาทำงาน {WORK_START}–{WORK_END} น. (เลือกวันเริ่มแล้ว เวลาจบจะตั้งเป็น {WORK_END} ให้อัตโนมัติ)</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <WorkDateTimeField label="วันเวลาเริ่ม *" kind="start" value={start} onChange={handleStartChange} />
+          <WorkDateTimeField label="วันเวลาสิ้นสุด *" kind="end" value={end} onChange={setEnd} />
+          <p className="-mt-2 text-xs text-gray-400 sm:col-span-2">เลือกได้เฉพาะเวลาทำงาน {WORK_START}–{WORK_END} น. · เลือกวันเริ่มแล้ว เวลาจบตั้งเป็น {WORK_END} ให้อัตโนมัติ</p>
         </div>
         )}
 
