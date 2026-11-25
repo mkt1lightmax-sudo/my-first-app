@@ -127,6 +127,7 @@ export default function CalendarPage() {
             if (!date) return <div key={i} />;
             const key = dateKey(date);
             const dayTypes = APPOINTMENT_TYPES.filter((t) => appointmentsByDate.get(key)?.some((a) => a.type === t));
+            const hasOff = timeOff.some((t) => t.off_date === key);
             const isToday = key === todayKey;
             const isSelected = key === selectedDate;
             return (
@@ -138,11 +139,13 @@ export default function CalendarPage() {
                 }`}
               >
                 {date.getDate()}
-                {dayTypes.length > 0 && (
-                  <span className="absolute bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5">
+                {(dayTypes.length > 0 || hasOff) && (
+                  <span className="absolute bottom-1.5 left-1/2 flex -translate-x-1/2 items-center gap-0.5">
                     {dayTypes.map((t) => (
                       <span key={t} className={`h-1.5 w-1.5 rounded-full ${APPOINTMENT_TYPE_STYLES[t].dot} ${isSelected ? "ring-1 ring-white" : ""}`} />
                     ))}
+                    {/* มีคนหยุด: วงกลมโปร่งสีชมพูหม่น */}
+                    {hasOff && <span className={`h-2 w-2 rounded-full border-2 ${isSelected ? "border-[#F2C9C9]" : "border-[#C98B8B]"}`} />}
                   </span>
                 )}
               </button>
@@ -158,6 +161,10 @@ export default function CalendarPage() {
               {APPOINTMENT_TYPE_LABELS[t]}
             </span>
           ))}
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full border-2 border-[#C98B8B]" />
+            มีคนหยุด
+          </span>
         </div>
       </div>
 
@@ -167,12 +174,16 @@ export default function CalendarPage() {
         </h2>
 
         {selectedOff.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {selectedOff.map((t) => (
-              <span key={t.id} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                {t.staff_name} หยุด{TIME_OFF_LABELS[t.period]}
-              </span>
-            ))}
+          <div className="mb-3 rounded-xl border border-[#EBCACA] bg-[#FBF1F1] p-3">
+            <div className="mb-1.5 text-xs font-medium text-[#8A4B4B]">🏖 พนักงานหยุดวันนี้ ({selectedOff.length})</div>
+            <div className="flex flex-wrap gap-1.5">
+              {selectedOff.map((t) => (
+                <span key={t.id} className="rounded-full bg-white px-3 py-1 text-sm text-[#8A4B4B] ring-1 ring-[#EBCACA]">
+                  <span className="font-medium">{t.staff_name}</span> · หยุด{TIME_OFF_LABELS[t.period]}
+                  {t.note ? <span className="text-[#B07A7A]"> ({t.note})</span> : null}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
