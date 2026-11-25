@@ -140,3 +140,21 @@ export const DOCUMENTS_RECEIVED_LABELS: Record<DocumentReceived, string> = {
   info_complete: "ข้อมูลครบ",
   pending_more_info: "รอข้อมูลเพิ่มเติม",
 };
+
+// สถานะลูกค้าตามขั้นตอนการขาย (โทนสีอ่อน เข้าชุดกับปฏิทิน)
+export const CUSTOMER_STATUSES = ["new", "survey_booked", "quoted", "won", "lost"] as const;
+export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
+export const CUSTOMER_STATUS_LABELS: Record<CustomerStatus, string> = {
+  new: "ลูกค้าใหม่",
+  survey_booked: "นัดสำรวจแล้ว",
+  quoted: "เสนอราคาแล้ว",
+  won: "ปิดการขาย",
+  lost: "ไม่สนใจ",
+};
+export const CUSTOMER_STATUS_STYLES: Record<CustomerStatus, string> = {
+  new: "bg-gray-100 text-gray-600",
+  survey_booked: "bg-[#EEF2F7] text-[#4A5F7A]",
+  quoted: "bg-[#F7F1E6] text-[#7A6440]",
+  won: "bg-[#EDF4EF] text-[#4C6B57]",
+  lost: "bg-gray-100 text-gray-400 line-through",
+};

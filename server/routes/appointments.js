@@ -129,6 +129,22 @@ const TYPE_LABELS = {
   installation: "ติดตั้ง",
 };
 
+// นัดหมายที่ผูกกับลูกค้า → เลื่อนสถานะลูกค้าตามขั้นตอนการขายให้อัตโนมัติ (ไม่ถอยหลัง, ไม่แตะลูกค้าที่ "ไม่สนใจ")
+const STATUS_ORDER = ["new", "survey_booked", "quoted", "won"];
+const STATUS_FOR_TYPE = { site_survey: "survey_booked", presentation: "quoted", installation: "won" };
+async function advanceCustomerStatus(appointment, staffId) {
+  const target = STATUS_FOR_TYPE[appointment.type];
+  if (!appointment.survey_id || !target || appointment.status === "cancelled") return;
+  const sv = (await query("SELECT id, status FROM surveys WHERE id = $1 AND deleted_at IS NULL", [appointment.survey_id])).rows[0];
+  if (!sv || sv.status === "lost" || STATUS_ORDER.indexOf(sv.status) >= STATUS_ORDER.indexOf(target)) return;
+  await query("UPDATE surveys SET status = $2, updated_at = now() WHERE id = $1", [sv.id, target]);
+  await query("INSERT INTO survey_history (survey_id, staff_id, action, changes) VALUES ($1, $2, 'update', $3)", [
+    sv.id,
+    staffId,
+    JSON.stringify({ status: { from: sv.status, to: target } }),
+  ]);
+}
+
 // สร้างแจ้งเตือนให้พนักงานที่ถูกมอบหมายงาน (ไม่แจ้งเตือนตัวเองถ้ามอบหมายให้ตัวเอง)
 async function notifyAssignment(appointment, actingStaffId) {
   if (!appointment.assigned_staff_id || appointment.assigned_staff_id === actingStaffId) return;
@@ -207,6 +223,7 @@ router.post("/", requireAuth, requirePermission("appointments.create"), async (r
   }
 
   await notifyAssignment(created, req.staff.id);
+  await advanceCustomerStatus(created, req.staff.id);
 
   res.status(201).json({ ok: true, appointment: created });
 });
@@ -341,6 +358,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
   );
 
   const updated = result.rows[0];
+  await advanceCustomerStatus(updated, req.staff.id);
   if (updated.assigned_staff_id !== existing.rows[0].assigned_staff_id) {
     await notifyAssignment(updated, req.staff.id);
   }

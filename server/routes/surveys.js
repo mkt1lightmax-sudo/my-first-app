@@ -222,9 +222,24 @@ router.get("/", requireAuth, async (req, res) => {
     conditions.push(`created_by = $${params.length}`);
   }
 
-  const where = `WHERE ${conditions.join(" AND ")}`;
-  const result = await query(`SELECT * FROM surveys ${where} ORDER BY created_at DESC`, params);
-  res.json({ ok: true, surveys: result.rows });
+  const where = `WHERE ${conditions.map((c) => c.replace(/\b(deleted_at|status|created_by|customer_code|customer_name|customer_phone)\b/g, "s.$1")).join(" AND ")}`;
+  const result = await query(
+    `SELECT s.*, st.name AS created_by_name FROM surveys s LEFT JOIN staff st ON st.id = s.created_by ${where} ORDER BY s.created_at DESC`,
+    params
+  );
+
+  // ผู้สร้างแต่ละคน + จำนวนลูกค้า (สำหรับตัวกรอง — เจ้าของ/แอดมิน/ผู้ช่วยแอดมิน)
+  let creators = [];
+  if (can(req.staff, "customers.filterByStaff")) {
+    creators = (
+      await query(
+        `SELECT st.id, st.name, COUNT(s.id)::int AS count
+         FROM surveys s JOIN staff st ON st.id = s.created_by
+         WHERE s.deleted_at IS NULL GROUP BY st.id, st.name ORDER BY count DESC, st.name`
+      )
+    ).rows;
+  }
+  res.json({ ok: true, surveys: result.rows, creators });
 });
 
 // ถังขยะ (แอดมิน): ลูกค้าที่ถูกลบภายใน 30 วัน — เกิน 30 วันลบถาวรตอนเปิดหน้านี้

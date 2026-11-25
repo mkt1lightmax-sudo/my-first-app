@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import MapPinPicker, { googleMapsUrl } from "../../components/MapPinPicker";
+import { CUSTOMER_STATUSES, CUSTOMER_STATUS_LABELS, CUSTOMER_STATUS_STYLES, type CustomerStatus } from "../../lib/survey";
 import { useAuth } from "../../context/AuthContext";
 import { can } from "../../lib/permissions";
 import { ROOF_DIRECTION_LABELS, type RoofDirection, type SolarCalcResult } from "../../lib/solar";
@@ -75,6 +76,7 @@ export default function SurveyDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinMsg, setPinMsg] = useState<string | null>(null);
+  const [savingStatus, setSavingStatus] = useState(false);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [calculation, setCalculation] = useState<SolarCalcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +131,19 @@ export default function SurveyDetailPage() {
     }
   }
 
+  // เปลี่ยนสถานะลูกค้า (บันทึกในประวัติด้วย)
+  async function changeStatus(st: CustomerStatus) {
+    if (!survey || survey.status === st) return;
+    setSavingStatus(true);
+    try {
+      await api.patch(`/surveys/${id}`, { status: st });
+      load();
+      setHistory(null);
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
   async function handleRecalculate() {
     setRecalculating(true);
     try {
@@ -165,6 +180,30 @@ export default function SurveyDetailPage() {
         <Link to="/surveys" className="text-sm text-brand-navy hover:underline">
           ← กลับไปรายการแบบสำรวจ
         </Link>
+      </div>
+
+      {/* สถานะตามขั้นตอนการขาย */}
+      <div className="rounded-lg border bg-white p-3">
+        <div className="mb-2 text-xs text-gray-500">สถานะลูกค้า{canEdit ? " (แตะเพื่อเปลี่ยน)" : ""}</div>
+        <div className="flex flex-wrap gap-1.5">
+          {CUSTOMER_STATUSES.map((st) => {
+            const on = survey.status === st;
+            return (
+              <button
+                key={st}
+                type="button"
+                disabled={!canEdit || savingStatus}
+                onClick={() => changeStatus(st)}
+                className={`rounded-full px-3 py-1 text-sm transition ${
+                  on ? `${CUSTOMER_STATUS_STYLES[st]} font-medium ring-2 ring-brand-navy/40` : "bg-white text-gray-400 ring-1 ring-gray-200"
+                } ${!canEdit && !on ? "hidden" : ""}`}
+              >
+                {on ? "● " : ""}
+                {CUSTOMER_STATUS_LABELS[st]}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -566,6 +605,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 function showValue(v: unknown) {
   if (v == null || v === "") return "(ว่าง)";
+  if (typeof v === "string" && v in CUSTOMER_STATUS_LABELS) return CUSTOMER_STATUS_LABELS[v as CustomerStatus];
   if (Array.isArray(v)) return v.join(", ") || "(ว่าง)";
   const t = String(v);
   return t.length > 60 ? `${t.slice(0, 60)}…` : t;
