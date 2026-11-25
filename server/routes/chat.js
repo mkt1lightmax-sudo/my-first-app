@@ -6,7 +6,17 @@ const { can, requirePermission, requireOwner } = require("../lib/permissions");
 
 // เซลล์เห็นเฉพาะแชทที่ตัวเองดูแล + ที่ยังไม่มีคนดูแล
 function canSeeConvo(staff, convo) {
-  return can(staff, "chat.viewAll") || convo.assigned_staff_id === null || convo.assigned_staff_id === staff.id;
+  return (
+    can(staff, "chat.viewAll") ||
+    convo.assigned_staff_id === staff.id ||
+    (convo.assigned_staff_id === null && can(staff, "chat.seeUnassigned"))
+  );
+}
+
+// เงื่อนไข SQL ของแชทที่คนนี้เห็น (ใช้คู่กับ $n ที่เป็น id ของคนนี้) — ผู้สำรวจเห็นเฉพาะที่มอบหมายให้ตัวเอง
+function visibleScope(staff, col, placeholder) {
+  if (can(staff, "chat.viewAll")) return null;
+  return can(staff, "chat.seeUnassigned") ? `(${col} IS NULL OR ${col} = ${placeholder})` : `${col} = ${placeholder}`;
 }
 const NOT_YOURS = { ok: false, error: "แชทนี้มีพนักงานคนอื่นดูแลอยู่" };
 const line = require("../lib/line");
@@ -306,7 +316,8 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
     params.push(value);
     where.push(sql.replaceAll("?", `$${params.length}`));
   };
-  if (!can(req.staff, "chat.viewAll")) add("(c.assigned_staff_id IS NULL OR c.assigned_staff_id = ?)", req.staff.id);
+  const vis = visibleScope(req.staff, "c.assigned_staff_id", "?");
+  if (vis) add(vis, req.staff.id);
 
   where.push(q.spam === "1" ? "c.is_spam" : "NOT c.is_spam");
   if (q.view === "closed") where.push("c.status = 'closed'");
@@ -343,7 +354,8 @@ router.get("/conversations", requireAuth, requirePermission("chat.view"), async 
   );
 
   // ตัวเลขบนแท็บ: ทิกเก็ตเปิดของฉัน / ทิกเก็ตเปิดทั้งหมดที่ฉันเห็น / ยังไม่อ่าน
-  const scope = can(req.staff, "chat.viewAll") ? "" : `AND (assigned_staff_id IS NULL OR assigned_staff_id = $1)`;
+  const scopeSql = visibleScope(req.staff, "assigned_staff_id", "$1");
+  const scope = scopeSql ? `AND ${scopeSql}` : "";
   const counts = (
     await query(
       `SELECT COUNT(*) FILTER (WHERE assigned_staff_id = $1)::int AS mine,
@@ -513,9 +525,10 @@ router.post("/conversations/:id/follow", requireAuth, async (req, res) => {
 router.get("/unread-count", requireAuth, requirePermission("chat.view"), async (req, res) => {
   const params = [];
   let scope = "";
-  if (!can(req.staff, "chat.viewAll")) {
+  const scopeSql = visibleScope(req.staff, "assigned_staff_id", "$1");
+  if (scopeSql) {
     params.push(req.staff.id);
-    scope = "AND (assigned_staff_id IS NULL OR assigned_staff_id = $1)";
+    scope = `AND ${scopeSql}`;
   }
   const r = (
     await query(

@@ -265,7 +265,7 @@ export default function ChatListPage() {
           unassignedCount={unassignedCount}
           tags={tags}
           accounts={accounts}
-          canSeeUnassigned={canReply}
+          canSeeUnassigned={can(staff, "chat.seeUnassigned")}
           onApply={(f) => {
             setFilters(f);
             setFilterOpen(false);

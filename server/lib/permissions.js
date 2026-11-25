@@ -10,9 +10,10 @@ const PERMISSIONS = {
   "appointments.create": ["admin", "assistant"],                         // สร้างงานนัดหมาย — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.editAny": ["admin", "assistant"],                        // แก้งานของทุกคน — เซลปิดไว้ชั่วคราว (2026-11-25) จนกว่าทีมใช้งานคล่อง เปิดคืนได้โดยเติม "sales"
   "appointments.editOwn": [],                                            // แก้เฉพาะงานที่มอบหมายให้ตัวเอง — ปิดไว้ (2026-11-25): นอกจากเจ้าของ/แอดมิน/ผู้ช่วยแอดมิน ให้ดูได้อย่างเดียว (เดิม surveyor, installer)
-  "chat.view": ["admin", "assistant", "sales", "viewer"],               // ดูแชท
+  "chat.view": ["admin", "assistant", "sales", "viewer", "surveyor"],    // ดูแชท (ผู้สำรวจ: เฉพาะแชทที่มอบหมายให้ตัวเอง)
   "chat.viewAll": ["admin", "assistant", "viewer"],                     // เห็นแชททุกห้อง (เซลล์เห็นเฉพาะของตัวเอง + ที่ยังไม่มีคนดูแล)
-  "chat.reply": ["admin", "assistant", "sales"],                        // ตอบแชท / รับเรื่อง / ติดป้าย
+  "chat.reply": ["admin", "assistant", "sales", "surveyor"],             // ตอบแชท / รับเรื่อง / ติดป้าย
+  "chat.seeUnassigned": ["admin", "assistant", "sales", "viewer"],       // เห็นแชทที่ยังไม่มีคนดูแล (ผู้สำรวจไม่เห็น — ได้เฉพาะที่แอดมินมอบหมาย)
   "chat.assignOthers": ["admin", "assistant"],                          // มอบหมายแชทให้คนอื่น
   "reports.view": ["admin", "assistant", "sales", "viewer"],            // ดูรายงานยอดขาย (เซลล์เห็นเฉพาะของตัวเอง)
   "reports.viewAll": ["admin", "assistant", "viewer"],                  // ดูยอดขายของทุกคน
