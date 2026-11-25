@@ -107,7 +107,10 @@ export type ChatMessage = {
   direction: "in" | "out" | "system";
   message_type: string;
   text: string | null;
+  has_external?: boolean; // มี id ข้อความของ LINE / Meta (Facebook ใช้ตอบกลับแบบอ้างอิงได้)
   meta?: {
+    quoteToken?: string; // LINE: ใช้ตอบกลับแบบอ้างอิงข้อความนี้
+    replyTo?: { id: number; direction: string; type: string; text: string }; // ข้อความนี้ตอบกลับข้อความไหน
     stickerId?: string | number;
     packageId?: string;
     resourceType?: string;

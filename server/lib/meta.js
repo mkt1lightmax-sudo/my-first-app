@@ -50,28 +50,35 @@ async function getProfile(token, channel, userId) {
 }
 
 // ส่งข้อความตอบลูกค้า (ใช้ได้ทั้ง Messenger และ IG) — คืนค่า message_id ของ Meta
-async function send(token, userId, text) {
+// replyToMid = ตอบกลับข้อความไหน (mid ของ Meta) — ลูกค้าจะเห็นเป็นการตอบกลับข้อความนั้น
+async function send(token, userId, text, replyToMid = null) {
   const data = await graphFetch(token, "/me/messages", {
     method: "POST",
-    body: JSON.stringify({ recipient: { id: userId }, messaging_type: "RESPONSE", message: { text } }),
+    body: JSON.stringify({
+      recipient: { id: userId },
+      messaging_type: "RESPONSE",
+      message: { text },
+      ...(replyToMid ? { reply_to: { mid: replyToMid } } : {}),
+    }),
   });
   return data.message_id || null;
 }
 
 // ส่งรูป / ไฟล์ให้ลูกค้า (Messenger / IG) — Meta ดึงจากลิงก์ https สาธารณะเอง
-async function sendAttachment(token, userId, type, url) {
+async function sendAttachment(token, userId, type, url, replyToMid = null) {
   const data = await graphFetch(token, "/me/messages", {
     method: "POST",
     body: JSON.stringify({
       recipient: { id: userId },
       messaging_type: "RESPONSE",
       message: { attachment: { type, payload: { url, is_reusable: false } } },
+      ...(replyToMid ? { reply_to: { mid: replyToMid } } : {}),
     }),
   });
   return data.message_id || null;
 }
-const sendImage = (token, userId, url) => sendAttachment(token, userId, "image", url);
-const sendFile = (token, userId, url) => sendAttachment(token, userId, "file", url);
+const sendImage = (token, userId, url, replyToMid) => sendAttachment(token, userId, "image", url, replyToMid);
+const sendFile = (token, userId, url, replyToMid) => sendAttachment(token, userId, "file", url, replyToMid);
 
 // หาว่า token เป็นของเพจไหน
 // วิธีหลัก: ถาม Meta ผ่าน /debug_token ด้วยกุญแจของแอปเรา (META_APP_ID + META_APP_SECRET)
@@ -138,14 +145,17 @@ function messageToText(message) {
 
 // ลิงก์ไฟล์แนบของ Meta (รูป/วิดีโอ/สติกเกอร์) — ลิงก์อาจหมดอายุหลังผ่านไประยะหนึ่ง
 function messageMeta(message) {
+  // ลูกค้า (หรือเพจ) ตอบกลับข้อความไหน
+  const replyToMid = message.reply_to?.mid || null;
   const att = message.attachments?.[0];
-  if (!att) return null;
+  if (!att) return replyToMid ? { replyToMid } : null;
   const coords = att.payload?.coordinates; // ตำแหน่งที่ลูกค้าแชร์ (ถ้า Meta ส่งพิกัดมา)
   return {
     url: att.payload?.url || null,
     stickerId: att.payload?.sticker_id || null,
     title: att.payload?.title || null,
     ...(coords ? { latitude: coords.lat, longitude: coords.long } : {}),
+    ...(replyToMid ? { replyToMid } : {}),
   };
 }
 

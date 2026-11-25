@@ -164,6 +164,22 @@ async function handleMetaEvent(account, event) {
   });
 }
 
+// สำเนาสั้นๆ ของข้อความที่ถูกตอบกลับ (แสดงในกล่องอ้างอิง)
+function replySnapshot(m) {
+  return { id: m.id, direction: m.direction, type: m.message_type, text: String(m.text || "").slice(0, 120) };
+}
+
+// ข้อความที่พนักงานเลือก "ตอบกลับ" — ต้องอยู่ในห้องแชทเดียวกัน
+async function loadReplyTarget(convo, replyToId) {
+  if (!replyToId) return null;
+  return (
+    await query("SELECT id, direction, message_type, text, meta, external_message_id FROM chat_messages WHERE id = $1 AND conversation_id = $2", [
+      Number(replyToId),
+      convo.id,
+    ])
+  ).rows[0] || null;
+}
+
 // บันทึกข้อความเข้าฐานข้อมูล (ใช้ร่วมกันทุกช่องทาง) — ข้อความซ้ำจะถูกข้าม
 async function recordMessage({ account, userId, getProfile, direction, type, text, meta: msgMeta = null, externalId, at, replyToken = null }) {
   let convo = (
@@ -183,6 +199,18 @@ async function recordMessage({ account, userId, getProfile, direction, type, tex
         [account.id, account.channel, userId, profile?.displayName || null, profile?.pictureUrl || null]
       )
     ).rows[0];
+  }
+
+  // ข้อความนี้ตอบกลับข้อความไหน → เก็บสำเนาสั้นๆ ไว้แสดงกล่องอ้างอิง
+  const quotedExternal = msgMeta?.quotedMessageId || msgMeta?.replyToMid;
+  if (quotedExternal) {
+    const q = (
+      await query("SELECT id, direction, message_type, text FROM chat_messages WHERE conversation_id = $1 AND external_message_id = $2", [
+        convo.id,
+        String(quotedExternal),
+      ])
+    ).rows[0];
+    if (q) msgMeta = { ...msgMeta, replyTo: replySnapshot(q) };
   }
 
   const inserted = await query(
@@ -572,7 +600,8 @@ router.get("/conversations/:id/messages", requireAuth, requirePermission("chat.v
   if (!canSeeConvo(req.staff, convo)) return res.status(403).json(NOT_YOURS);
 
   const messages = await query(
-    `SELECT m.id, m.direction, m.message_type, m.text, m.meta, m.created_at, s.name AS staff_name
+    `SELECT m.id, m.direction, m.message_type, m.text, m.meta, m.created_at, s.name AS staff_name,
+            (m.external_message_id IS NOT NULL) AS has_external
      FROM chat_messages m LEFT JOIN staff s ON s.id = m.sent_by_staff_id
      WHERE m.conversation_id = $1 ORDER BY m.created_at ASC, m.id ASC LIMIT 500`,
     [convo.id]
@@ -652,7 +681,7 @@ async function saveOutgoing({ convo, staff, type, text, msgMeta = null, external
        VALUES ($1, 'out', $2, $3, $4, $5, $6)
        ON CONFLICT (external_message_id) WHERE external_message_id IS NOT NULL
        DO UPDATE SET sent_by_staff_id = EXCLUDED.sent_by_staff_id, meta = COALESCE(EXCLUDED.meta, chat_messages.meta)
-       RETURNING id, direction, message_type, text, meta, created_at`,
+       RETURNING id, direction, message_type, text, meta, created_at, (external_message_id IS NOT NULL) AS has_external`,
       [convo.id, type, text, msgMeta ? JSON.stringify(msgMeta) : null, staff.id, externalId]
     )
   ).rows[0];
@@ -672,16 +701,20 @@ router.post("/conversations/:id/messages", requireAuth, requirePermission("chat.
   if (!ctx) return;
   const { convo, account } = ctx;
 
+  const target = await loadReplyTarget(convo, req.body?.replyTo);
   let externalId = null;
   try {
-    if (account.channel === "line") await sendLine(account, convo, text);
-    else externalId = await meta.send(account.meta_page_token, convo.external_user_id, text);
+    if (account.channel === "line") {
+      const quoteToken = target?.meta?.quoteToken;
+      externalId = await sendLine(account, convo, quoteToken ? { type: "text", text, quoteToken } : text);
+    } else externalId = await meta.send(account.meta_page_token, convo.external_user_id, text, target?.external_message_id);
   } catch (err) {
     console.error("send chat error:", err);
     return res.status(502).json({ ok: false, error: `ส่งข้อความไป ${account.name} ไม่สำเร็จ` });
   }
 
-  res.json({ ok: true, message: await saveOutgoing({ convo, staff: req.staff, type: "text", text, externalId }) });
+  const msgMeta = target ? { replyTo: replySnapshot(target) } : null;
+  res.json({ ok: true, message: await saveOutgoing({ convo, staff: req.staff, type: "text", text, msgMeta, externalId }) });
 });
 
 // ส่งรูปให้ลูกค้า — body: { data: "<base64>", contentType: "image/jpeg" | "image/png" }
@@ -714,17 +747,26 @@ router.post("/conversations/:id/images", requireAuth, requirePermission("chat.re
   const proto = req.get("x-forwarded-proto") || req.protocol;
   const url = `${proto}://${req.get("x-forwarded-host") || req.get("host")}/api/chat/media/${token}`;
 
+  // LINE ตอบกลับแบบอ้างอิงได้แค่ข้อความ/สติกเกอร์ — รูปส่งเป็นปกติ; Facebook ตอบกลับได้
+  const target = account.channel === "line" ? null : await loadReplyTarget(convo, req.body?.replyTo);
   let externalId = null;
   try {
-    if (account.channel === "line") await sendLine(account, convo, line.imageMessage(url));
-    else externalId = await meta.sendImage(account.meta_page_token, convo.external_user_id, url);
+    if (account.channel === "line") externalId = await sendLine(account, convo, line.imageMessage(url));
+    else externalId = await meta.sendImage(account.meta_page_token, convo.external_user_id, url, target?.external_message_id);
   } catch (err) {
     console.error("send image error:", err);
     await query("DELETE FROM chat_media WHERE token = $1", [token]);
     return res.status(502).json({ ok: false, error: `ส่งรูปไป ${account.name} ไม่สำเร็จ` });
   }
 
-  const message = await saveOutgoing({ convo, staff: req.staff, type: "image", text: "[รูปภาพ]", msgMeta: { mediaToken: token }, externalId });
+  const message = await saveOutgoing({
+    convo,
+    staff: req.staff,
+    type: "image",
+    text: "[รูปภาพ]",
+    msgMeta: { mediaToken: token, ...(target ? { replyTo: replySnapshot(target) } : {}) },
+    externalId,
+  });
   res.json({ ok: true, message });
 });
 
@@ -753,10 +795,15 @@ router.post("/conversations/:id/files", requireAuth, requirePermission("chat.rep
   const proto = req.get("x-forwarded-proto") || req.protocol;
   const url = `${proto}://${req.get("x-forwarded-host") || req.get("host")}/api/chat/media/${token}`;
 
+  const target = await loadReplyTarget(convo, req.body?.replyTo);
   let externalId = null;
   try {
-    if (account.channel === "line") await sendLine(account, convo, `📄 ${fileName}\nกดเพื่อเปิดไฟล์: ${url}`);
-    else externalId = await meta.sendFile(account.meta_page_token, convo.external_user_id, url);
+    if (account.channel === "line") {
+      // LINE ส่งไฟล์เป็นข้อความพร้อมลิงก์ จึงตอบกลับแบบอ้างอิงได้
+      const fileText = `📄 ${fileName}\nกดเพื่อเปิดไฟล์: ${url}`;
+      const quoteToken = target?.meta?.quoteToken;
+      externalId = await sendLine(account, convo, quoteToken ? { type: "text", text: fileText, quoteToken } : fileText);
+    } else externalId = await meta.sendFile(account.meta_page_token, convo.external_user_id, url, target?.external_message_id);
   } catch (err) {
     console.error("send file error:", err);
     await query("DELETE FROM chat_media WHERE token = $1", [token]);
@@ -768,7 +815,7 @@ router.post("/conversations/:id/files", requireAuth, requirePermission("chat.rep
     staff: req.staff,
     type: "file",
     text: `[ไฟล์] ${fileName}`,
-    msgMeta: { mediaToken: token, fileName, fileSize: bytes.length },
+    msgMeta: { mediaToken: token, fileName, fileSize: bytes.length, ...(target ? { replyTo: replySnapshot(target) } : {}) },
     externalId,
   });
   res.json({ ok: true, message });
@@ -792,8 +839,16 @@ router.post("/conversations/:id/stickers", requireAuth, requirePermission("chat.
     return res.status(400).json({ ok: false, error: "ส่งสติกเกอร์ได้เฉพาะแชท LINE — ช่องทางนี้ใช้การแนบรูปแทน" });
   }
 
+  const target = await loadReplyTarget(convo, req.body?.replyTo);
+  let externalId = null;
   try {
-    await sendLine(account, convo, { type: "sticker", packageId: String(packageId), stickerId: String(stickerId) });
+    const quoteToken = target?.meta?.quoteToken;
+    externalId = await sendLine(account, convo, {
+      type: "sticker",
+      packageId: String(packageId),
+      stickerId: String(stickerId),
+      ...(quoteToken ? { quoteToken } : {}),
+    });
   } catch (err) {
     console.error("send sticker error:", err);
     return res.status(502).json({ ok: false, error: `ส่งสติกเกอร์ไป ${account.name} ไม่สำเร็จ` });
@@ -804,7 +859,8 @@ router.post("/conversations/:id/stickers", requireAuth, requirePermission("chat.
     staff: req.staff,
     type: "sticker",
     text: "[สติกเกอร์]",
-    msgMeta: { packageId: String(packageId), stickerId: String(stickerId) },
+    msgMeta: { packageId: String(packageId), stickerId: String(stickerId), ...(target ? { replyTo: replySnapshot(target) } : {}) },
+    externalId,
   });
   res.json({ ok: true, message });
 });
@@ -821,7 +877,7 @@ router.get("/media/:token", async (req, res) => {
   res.send(m.bytes);
 });
 
-// message: ข้อความตัวอักษร (string) หรือข้อความแบบอื่นของ LINE (เช่น รูป)
+// message: ข้อความตัวอักษร (string) หรือข้อความแบบอื่นของ LINE (เช่น รูป) — คืน id ข้อความที่ LINE ให้มา
 async function sendLine(account, convo, message) {
   const tokenFresh =
     convo.reply_token && convo.reply_token_at && Date.now() - new Date(convo.reply_token_at).getTime() < REPLY_TOKEN_MAX_AGE_MS;
@@ -829,13 +885,14 @@ async function sendLine(account, convo, message) {
     // ใช้ reply token ทันที (ฟรี) — ล้างทิ้งก่อนส่ง เพราะใช้ได้ครั้งเดียว
     await query("UPDATE chat_conversations SET reply_token = NULL WHERE id = $1", [convo.id]);
     try {
-      await line.reply(account.line_access_token, convo.reply_token, message);
-      return;
+      const r = await line.reply(account.line_access_token, convo.reply_token, message);
+      return r?.sentMessages?.[0]?.id || null;
     } catch {
       // token หมดอายุ — ไปส่งแบบ push แทน
     }
   }
-  await line.push(account.line_access_token, convo.external_user_id, message);
+  const r = await line.push(account.line_access_token, convo.external_user_id, message);
+  return r?.sentMessages?.[0]?.id || null;
 }
 
 module.exports = router;

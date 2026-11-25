@@ -75,7 +75,16 @@ const TYPE_LABELS = {
 };
 
 // ข้อมูลเสริมที่ต้องใช้แสดงผล (สติกเกอร์ / ไฟล์ / แผนที่ / รูปจากลิงก์ภายนอก)
+// รหัสสำหรับตอบกลับ (quoteToken) และข้อความที่ลูกค้าตอบกลับ (quotedMessageId)
 function messageMeta(message) {
+  const base = baseMessageMeta(message);
+  const extra = {};
+  if (message.quoteToken) extra.quoteToken = message.quoteToken;
+  if (message.quotedMessageId) extra.quotedMessageId = message.quotedMessageId;
+  return Object.keys(extra).length ? { ...(base || {}), ...extra } : base;
+}
+
+function baseMessageMeta(message) {
   switch (message.type) {
     case "text":
       // อีโมจิของ LINE มาเป็นข้อความแทน เช่น "(emoji)" + ตำแหน่งและรหัสรูป — เก็บไว้เพื่อแสดงเป็นรูป

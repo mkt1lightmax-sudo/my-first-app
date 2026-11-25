@@ -25,6 +25,9 @@ export default function ChatThreadPage() {
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PreparedImage | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  // ข้อความที่กำลังตอบกลับ (Reply)
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -119,8 +122,10 @@ export default function ChatThreadPage() {
       const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/images`, {
         data,
         contentType: pending.contentType,
+        replyTo: replyTo?.id,
       });
       setMessages((prev) => [...prev, d.message]);
+      setReplyTo(null);
       URL.revokeObjectURL(pending.previewUrl);
       setPending(null);
     } catch (err) {
@@ -139,8 +144,10 @@ export default function ChatThreadPage() {
       const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/files`, {
         data,
         fileName: pendingFile.name,
+        replyTo: replyTo?.id,
       });
       setMessages((prev) => [...prev, d.message]);
+      setReplyTo(null);
       setPendingFile(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ส่งไฟล์ไม่สำเร็จ");
@@ -154,8 +161,9 @@ export default function ChatThreadPage() {
     setSending(true);
     setError(null);
     try {
-      const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/stickers`, s);
+      const d = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/stickers`, { ...s, replyTo: replyTo?.id });
       setMessages((prev) => [...prev, d.message]);
+      setReplyTo(null);
       rememberSticker(s);
       setStickerOpen(false);
     } catch (err) {
@@ -173,9 +181,13 @@ export default function ChatThreadPage() {
     setSending(true);
     setError(null);
     try {
-      const data = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/messages`, { text: value });
+      const data = await api.post<{ ok: true; message: ChatMessage }>(`/chat/conversations/${id}/messages`, {
+        text: value,
+        replyTo: replyTo?.id,
+      });
       setMessages((prev) => [...prev, data.message]);
       setText("");
+      setReplyTo(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ส่งข้อความไม่สำเร็จ");
     } finally {
@@ -337,7 +349,17 @@ export default function ChatThreadPage() {
           return (
             <div key={m.id}>
               {newDay && <DateDivider iso={m.created_at} />}
-              <MessageBubble m={m} />
+              <MessageBubble
+                m={m}
+                onReply={
+                  canReply && !closed && canQuote(m, conversation?.channel)
+                    ? () => {
+                        setReplyTo(m);
+                        textRef.current?.focus();
+                      }
+                    : undefined
+                }
+              />
             </div>
           );
         })}
@@ -372,6 +394,18 @@ export default function ChatThreadPage() {
           </button>
         </div>
       ) : (
+        <>
+        {replyTo && (
+          <div className="flex items-center gap-2 border-t border-gray-100 bg-gray-50 px-4 py-2">
+            <div className="min-w-0 flex-1 border-l-2 border-brand-navy pl-2">
+              <div className="text-xs font-medium text-brand-navy">ตอบกลับ{replyTo.direction === "out" ? "ข้อความของเรา" : conversation?.display_name ? ` ${conversation.display_name}` : "ลูกค้า"}</div>
+              <div className="truncate text-sm text-gray-600">{replyTo.text || "[ข้อความ]"}</div>
+            </div>
+            <button type="button" onClick={() => setReplyTo(null)} aria-label="ยกเลิกการตอบกลับ" className="px-2 text-xl leading-none text-gray-400">
+              ×
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-gray-100 bg-white px-3 py-2.5">
           <input
             ref={fileRef}
@@ -407,6 +441,7 @@ export default function ChatThreadPage() {
             </button>
           )}
           <textarea
+            ref={textRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -429,6 +464,7 @@ export default function ChatThreadPage() {
             <SendIcon className="h-5 w-5" />
           </button>
         </form>
+        </>
       )}
 
       {deleteOpen && conversation && (
@@ -510,8 +546,29 @@ export default function ChatThreadPage() {
 
 const MAX_PDF_BYTES = 3 * 1024 * 1024;
 
-function MessageBubble({ m }: { m: ChatMessage }) {
+// ตอบกลับแบบอ้างอิงได้ไหม: LINE ต้องมี quoteToken (ข้อความที่ลูกค้าส่งหลังอัปเดตนี้), Facebook ใช้ id ข้อความได้เลย
+function canQuote(m: ChatMessage, channel?: string) {
+  if (m.direction === "system") return false;
+  if (channel === "line") return m.direction === "in" && Boolean(m.meta?.quoteToken);
+  return Boolean(m.has_external);
+}
+
+function MessageBubble({ m, onReply }: { m: ChatMessage; onReply?: () => void }) {
   const time = new Date(m.created_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // มือถือ: กดค้าง 0.5 วิ = ตอบกลับ
+  const touchHandlers = onReply
+    ? {
+        onTouchStart: () => {
+          pressTimer.current = setTimeout(() => {
+            navigator.vibrate?.(15);
+            onReply();
+          }, 500);
+        },
+        onTouchEnd: () => pressTimer.current && clearTimeout(pressTimer.current),
+        onTouchMove: () => pressTimer.current && clearTimeout(pressTimer.current),
+      }
+    : {};
 
   if (m.direction === "system") {
     return (
@@ -523,10 +580,33 @@ function MessageBubble({ m }: { m: ChatMessage }) {
 
   const out = m.direction === "out";
   const bare = isBareMedia(m);
+  const quote = m.meta?.replyTo;
+  const replyButton = onReply && (
+    <button
+      type="button"
+      onClick={onReply}
+      aria-label="ตอบกลับ"
+      title="ตอบกลับ"
+      className="mb-0.5 hidden h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 group-hover:flex"
+    >
+      ↩
+    </button>
+  );
   return (
-    <div className={`mb-1.5 flex items-end gap-1.5 ${out ? "justify-end" : "justify-start"}`}>
+    <div className={`group mb-1.5 flex items-end gap-1.5 ${out ? "justify-end" : "justify-start"}`}>
+      {out && replyButton}
       {out && <span className="mb-0.5 text-[12px] text-gray-400">{time}</span>}
-      <div className="max-w-[78%]">
+      <div className="max-w-[78%] select-none sm:select-auto" {...touchHandlers}>
+        {quote && (
+          <div
+            className={`mb-0.5 truncate rounded-xl border-l-2 px-2.5 py-1 text-xs ${
+              out ? "ml-auto border-brand-navy/40 bg-brand-navy/5 text-gray-600" : "border-gray-300 bg-gray-100 text-gray-600"
+            }`}
+          >
+            <span className="font-medium">{quote.direction === "out" ? "ตอบข้อความของเรา" : "ตอบข้อความลูกค้า"}: </span>
+            {quote.text || "[ข้อความ]"}
+          </div>
+        )}
         {bare ? (
           <MessageContent m={m} out={out} />
         ) : (
@@ -541,6 +621,7 @@ function MessageBubble({ m }: { m: ChatMessage }) {
         {out && m.staff_name && <div className="mt-0.5 text-right text-[12px] text-gray-400">{m.staff_name}</div>}
       </div>
       {!out && <span className="mb-0.5 text-[12px] text-gray-400">{time}</span>}
+      {!out && replyButton}
     </div>
   );
 }
