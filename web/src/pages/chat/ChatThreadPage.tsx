@@ -347,7 +347,7 @@ export default function ChatThreadPage() {
           const prev = messages[i - 1];
           const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
           return (
-            <div key={m.id}>
+            <div key={m.id} id={`msg-${m.id}`} className="rounded-2xl transition-colors duration-700">
               {newDay && <DateDivider iso={m.created_at} />}
               <MessageBubble
                 m={m}
@@ -553,6 +553,18 @@ function canQuote(m: ChatMessage, channel?: string) {
   return Boolean(m.has_external);
 }
 
+// กดกล่องอ้างอิง → เลื่อนไปข้อความต้นทาง แล้วไฮไลต์สั้นๆ
+function jumpToMessage(id: number) {
+  const el = document.getElementById(`msg-${id}`);
+  if (!el) {
+    window.alert("ข้อความต้นทางเก่ามาก ไม่ได้แสดงในหน้านี้");
+    return;
+  }
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("bg-amber-100");
+  setTimeout(() => el.classList.remove("bg-amber-100"), 1500);
+}
+
 function MessageBubble({ m, onReply }: { m: ChatMessage; onReply?: () => void }) {
   const time = new Date(m.created_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -598,14 +610,18 @@ function MessageBubble({ m, onReply }: { m: ChatMessage; onReply?: () => void })
       {out && <span className="mb-0.5 text-[12px] text-gray-400">{time}</span>}
       <div className="max-w-[78%] select-none sm:select-auto" {...touchHandlers}>
         {quote && (
-          <div
-            className={`mb-0.5 truncate rounded-xl border-l-2 px-2.5 py-1 text-xs ${
+          <button
+            type="button"
+            onClick={() => jumpToMessage(quote.id)}
+            title="กดเพื่อดูข้อความต้นทาง"
+            className={`mb-0.5 block max-w-full truncate rounded-xl border-l-2 px-2.5 py-1 text-left text-xs hover:brightness-95 ${
               out ? "ml-auto border-brand-navy/40 bg-brand-navy/5 text-gray-600" : "border-gray-300 bg-gray-100 text-gray-600"
             }`}
           >
             <span className="font-medium">{quote.direction === "out" ? "ตอบข้อความของเรา" : "ตอบข้อความลูกค้า"}: </span>
             {quote.text || "[ข้อความ]"}
-          </div>
+            <span className="ml-1 text-gray-400">↑</span>
+          </button>
         )}
         {bare ? (
           <MessageContent m={m} out={out} />
